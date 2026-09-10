@@ -35,7 +35,12 @@
   <label>Street and number <input name="street" maxlength="200" required value="{{ a.street if a else '' }}"></label>
   <label>Postal code <input name="postal_code" maxlength="20" required value="{{ a.postal_code if a else '' }}" style="width:6rem"></label>
   <label>City <input name="city" maxlength="100" required value="{{ a.city if a else '' }}"></label>
-  <label>Country <input name="country" maxlength="100" required value="{{ a.country if a else '' }}"></label>
+  <label>Country
+    <select name="country" required>
+      <option value="" {% if not a %}selected{% endif %}>— choose —</option>
+      {% if a and a.country not in country_names %}<option value="{{ a.country }}" selected>{{ a.country }}</option>{% endif %}
+      {% for c in country_names %}<option value="{{ c }}" {% if a and a.country == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select></label>
   <label>Phone <input name="phone" maxlength="50" value="{{ a.phone or '' if a else '' }}"></label>
   <label class="inline"><input type="checkbox" name="is_default" {% if a and a.is_default %}checked{% endif %}> Default</label>
 {% endmacro %}

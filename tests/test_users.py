@@ -22,6 +22,23 @@ def test_landing_and_login_flow(anon):
     assert anon.get("/projects", follow_redirects=False).status_code == 303
 
 
+def test_sqlite_mode_has_demo_user(anon):
+    from megacalendar import config
+
+    assert config.DATABASE_URL.startswith("sqlite")
+    r = anon.get("/api/me", auth=("user", "test1234"))
+    assert r.status_code == 200 and r.json()["project_limit"] == 5 and r.json()["is_master"] is False
+
+
+def test_country_dropdown_in_profile(make_user):
+    frank = make_user("frank", "frankpw12")
+    page = frank.get("/profile").text
+    assert '<select name="country" required>' in page and "<option value=\"Poland\"" in page and "<option value=\"World\"" not in page
+    frank.post("/api/me/addresses", json={"recipient": "F", "street": "S", "postal_code": "1", "city": "C", "country": "Atlantis"})
+    page = frank.get("/profile").text
+    assert '<option value="Atlantis" selected>Atlantis</option>' in page  # unknown legacy value is kept selectable
+
+
 def test_api_requires_authentication_and_accepts_basic(anon):
     r = anon.get("/api/projects")
     assert r.status_code == 401 and r.headers["www-authenticate"].startswith("Basic")

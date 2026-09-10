@@ -74,6 +74,14 @@ DEFAULT_COLORS: dict[str, dict[str, dict | None]] = {
 
 
 @lru_cache(maxsize=1)
+def country_choices() -> list[str]:
+    """English country names (ISO 3166 territories only, no regions like 'World')."""
+    territories = Locale.parse("en").territories
+    names = [name for code, name in territories.items() if len(code) == 2 and code.isalpha() and code not in ("ZZ", "QO", "EU", "EZ", "UN")]
+    return sorted(set(names))
+
+
+@lru_cache(maxsize=1)
 def language_choices() -> list[tuple[str, str]]:
     """(locale id, display name) for every language Babel knows, without territory variants."""
     out = []

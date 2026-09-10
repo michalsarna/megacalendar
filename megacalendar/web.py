@@ -20,7 +20,7 @@ from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
 from .schemas import (BACKGROUND_MODES, AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate,
-                      UserCreate, UserUpdate, language_choices)
+                      UserCreate, UserUpdate, country_choices, language_choices)
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -128,6 +128,7 @@ def _ctx(request: Request, **extra):
         "layouts": LAYOUTS,
         "layout_labels": LAYOUT_LABELS,
         "languages": language_choices(),
+        "country_names": country_choices(),
         "title_aligns": TITLE_ALIGNS,
         "fonts": available_families(),
         "max_margin_mm": config.MAX_MARGIN_MM,

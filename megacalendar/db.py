@@ -59,10 +59,12 @@ def _add_missing_columns() -> None:
 
 def _bootstrap_users() -> None:
     """Create the master user (master / master) if there is none and give ownerless
-    projects and assets from single-user versions to it."""
+    projects and assets from single-user versions to it. In SQLite (development) mode a
+    demo account user / test1234 with a limit of 5 projects is created as well."""
     from sqlalchemy import select
 
-    from .auth import MASTER_DEFAULT_PASSWORD, MASTER_USERNAME, hash_password
+    from . import config
+    from .auth import DEV_USER_PASSWORD, DEV_USERNAME, MASTER_DEFAULT_PASSWORD, MASTER_USERNAME, hash_password
     from .models import BackgroundAsset, Project, User
 
     with SessionLocal() as db:
@@ -72,6 +74,9 @@ def _bootstrap_users() -> None:
                           is_master=True, project_limit=None)
             db.add(master)
             db.flush()
+        if config.DATABASE_URL.startswith("sqlite") and db.scalar(select(User).where(User.username == DEV_USERNAME)) is None:
+            db.add(User(username=DEV_USERNAME, password_hash=hash_password(DEV_USER_PASSWORD), is_master=False,
+                        project_limit=5, first_name="Demo", last_name="User"))
         for model in (Project, BackgroundAsset):
             for row in db.scalars(select(model).where(model.owner_id.is_(None))):
                 row.owner_id = master.id

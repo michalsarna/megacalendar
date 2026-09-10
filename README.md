@@ -1,7 +1,7 @@
 # megacalendar
 
 Web app that generates **print-ready, large-format wall calendars** as PDF.
-One calendar year (1 Jan – 31 Dec) on a single A0 or A1 sheet, in RGB (default) or
+One calendar year (1 Jan – 31 Dec) on a single sheet from A5 up to A0, in RGB (default) or
 CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
 
 ## Features
@@ -12,7 +12,7 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
   passwords. Users keep a profile (name, surname, phone, email) and any number of delivery addresses.
   The landing page is public; everything else needs a login (session cookie, or HTTP Basic for the API).
 
-- Sheet sizes A0 and A1, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
+- Sheet sizes A0 to A5, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
 - Adjustable space between months (validated against the sheet so blocks never overlap), title with
   optional year (stacked when both share an alignment, side by side otherwise).
 - Two layouts: month grids (3×4 portrait, 4×3 landscape) or table style, one column per month with
@@ -60,7 +60,8 @@ pip install -e ".[dev]"
 scripts/start.sh            # or: uvicorn megacalendar.main:app --reload
 ```
 
-Open <http://127.0.0.1:8000> and log in as `master` / `master` (created automatically). The SQLite file,
+Open <http://127.0.0.1:8000> and log in as `master` / `master` (created automatically). With SQLite a demo
+account `user` / `test1234` with a limit of 5 projects is created as well. The SQLite file,
 uploaded artwork and the session secret are written to `./data/`.
 `scripts/start.sh` passes extra arguments to uvicorn, e.g. `scripts/start.sh --reload`.
 

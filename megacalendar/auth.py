@@ -18,6 +18,8 @@ from .models import User
 PBKDF2_ITERATIONS = 600_000
 MASTER_USERNAME = "master"
 MASTER_DEFAULT_PASSWORD = "master"
+DEV_USERNAME = "user"  # created only with the SQLite (development) database
+DEV_USER_PASSWORD = "test1234"
 
 
 # ---------------------------------------------------------------- passwords

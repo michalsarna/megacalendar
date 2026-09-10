@@ -38,6 +38,15 @@ def test_rgb_mode_is_default_and_converts_cmyk_colours(size, orient, w, h):
     assert_print_ready(render(spec), w, h, mode="RGB")
 
 
+@pytest.mark.parametrize("size,w,h", [("A2", 420, 594), ("A3", 297, 420), ("A4", 210, 297), ("A5", 148, 210)])
+@pytest.mark.parametrize("layout", ["grid", "columns"])
+def test_smaller_sheets_render_in_both_layouts(size, w, h, layout):
+    spec = CalendarSpec(year=2027, page_size=size, layout=layout, show_week_numbers=True, color_mode="CMYK",
+                        holidays_enabled=True, holiday_country="PL", month_border_color=CMYK(0, 0, 0, 100), margin_mm=5)
+    assert_print_ready(render(spec), w, h)
+    assert_print_ready(render(CalendarSpec(year=2027, page_size=size, orientation="landscape", layout=layout)), h, w, mode="RGB")
+
+
 def test_margin_above_limit_rejected():
     with pytest.raises(ValueError, match="10.0mm"):
         render(CalendarSpec(year=2027, margin_mm=12))
@@ -45,7 +54,7 @@ def test_margin_above_limit_rejected():
 
 def test_unsupported_page_size_rejected():
     with pytest.raises(ValueError, match="unsupported page size"):
-        render(CalendarSpec(year=2027, page_size="A2"))
+        render(CalendarSpec(year=2027, page_size="A6"))
 
 
 def test_svg_background_becomes_cmyk_vectors(tmp_path: Path):

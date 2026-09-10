@@ -14,9 +14,10 @@ def _create(client, **over):
     return r.json()
 
 
-def test_meta_lists_only_a0_a1(client):
+def test_meta_lists_sheet_sizes(client):
     meta = client.get("/api/meta").json()
-    assert sorted(meta["page_sizes"]) == ["A0", "A1"]
+    assert sorted(meta["page_sizes"]) == ["A0", "A1", "A2", "A3", "A4", "A5"]
+    assert meta["page_sizes"]["A5"] == {"width_mm": 148, "height_mm": 210}
     assert meta["color_modes"] == ["RGB", "CMYK"]
     assert meta["max_margin_mm"] == 10.0
     assert "DejaVuSans" in meta["fonts"]
@@ -56,7 +57,7 @@ def test_project_crud_and_pdf(client):
 
 def test_validation(client):
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "margin_mm": 10.5}).status_code == 422
-    assert client.post("/api/projects", json={"name": "x", "year": 2027, "page_size": "A2"}).status_code == 422
+    assert client.post("/api/projects", json={"name": "x", "year": 2027, "page_size": "A6"}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "holidays_enabled": True}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "font_family": "Comic"}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "color_mode": "LAB"}).status_code == 422

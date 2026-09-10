@@ -31,6 +31,15 @@ def test_schema_compiles_on_every_dialect(dialect):
             assert "VARCHAR)" not in ddl and "VARCHAR," not in ddl  # every string column has a length
 
 
+def test_country_choices_are_countries():
+    from megacalendar.schemas import country_choices
+
+    names = country_choices()
+    assert "Poland" in names and "Finland" in names and "Germany" in names
+    assert "World" not in names and "Unknown Region" not in names and "European Union" not in names
+    assert names == sorted(names) and len(names) > 200
+
+
 def test_drivers_importable():
     import psycopg  # noqa: F401
     import pymysql  # noqa: F401
