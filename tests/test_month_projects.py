@@ -291,22 +291,22 @@ def test_table_layout_alignment():
 
 def test_new_project_color_and_border_defaults(client):
     y = client.post("/api/projects", json={"name": "Y grid", "year": 2027}).json()
-    assert y["month_border_color"] == {"r": 224, "g": 224, "b": 224}  # light grey, on by default everywhere
+    assert y["month_border_color"] is None  # off by default everywhere
     assert y["weekend_color"] == {"r": 224, "g": 224, "b": 224}
     assert y["day_border_color"] is None  # grid-style year calendars: off by default
     assert (y["day_number_scale"], y["day_number_align"]) == (100, "center")
 
     t = client.post("/api/projects", json={"name": "Y table", "year": 2027, "layout": "columns"}).json()
     assert t["day_border_color"] == {"r": 77, "g": 77, "b": 77}  # dark grey, on by default in table style
-    assert t["month_border_color"] == {"r": 224, "g": 224, "b": 224}
+    assert t["month_border_color"] is None
     assert (t["day_number_scale"], t["day_number_align"]) == (50, "left")
 
     m = client.post("/api/projects", json={"name": "Month", "year": 2027, "kind": "month", "month": 6}).json()
     assert m["day_border_color"] == {"r": 77, "g": 77, "b": 77}
 
     # explicit values still win over every new default
-    y2 = client.post("/api/projects", json={"name": "Y2", "year": 2027, "month_border_color": None}).json()
-    assert y2["month_border_color"] is None
+    y2 = client.post("/api/projects", json={"name": "Y2", "year": 2027, "month_border_color": "#123456"}).json()
+    assert y2["month_border_color"] == {"r": 18, "g": 52, "b": 86}
     t2 = client.post("/api/projects", json={"name": "T2", "year": 2027, "layout": "columns",
                                             "day_number_align": "right", "day_border_color": None}).json()
     assert t2["day_number_align"] == "right" and t2["day_border_color"] is None

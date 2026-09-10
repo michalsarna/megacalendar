@@ -392,6 +392,54 @@ def test_missing_columns_are_added_on_startup(tmp_path):
         legacy_file.unlink(missing_ok=True)
 
 
+def test_valign_migration_preserves_month_calendar_look(tmp_path):
+    """Existing one-month calendars relied on day_number_align (left/right) implying a top-corner
+    vertical position; day_number_valign/day_name_valign must backfill to "top" for kind="month"
+    rows instead of the generic "middle" server_default, or their look silently changes on upgrade."""
+    from sqlalchemy import create_engine, inspect, text
+    from sqlalchemy.orm import sessionmaker
+
+    from megacalendar import db as dbmod
+
+    path = tmp_path / "old.db"
+    eng = create_engine(f"sqlite:///{path}")
+    dbmod.Base.metadata.create_all(eng)
+    legacy_columns = [c["name"] for c in inspect(eng).get_columns("projects")
+                     if c["name"] not in ("day_number_valign", "day_name_valign")]
+    with eng.begin() as conn:
+        conn.execute(text(f"CREATE TABLE projects_legacy AS SELECT {', '.join(legacy_columns)} FROM projects"))
+        conn.execute(text("DROP TABLE projects"))
+        conn.execute(text("ALTER TABLE projects_legacy RENAME TO projects"))
+        conn.exec_driver_sql(
+            "INSERT INTO projects (id, name, kind, year, month, page_size, orientation, margin_mm, locale, week_start, "
+            "font_family, day_number_align, title_color, month_name_color, day_name_color, day_number_color, "
+            "week_number_color, color_mode, created_at, updated_at) VALUES "
+            "(1, 'old month', 'month', 2027, 1, 'A4', 'portrait', 10, 'en', 0, 'DejaVuSans', 'left', "
+            "'{\"r\":0,\"g\":0,\"b\":0}', '{\"r\":0,\"g\":0,\"b\":0}', '{\"r\":0,\"g\":0,\"b\":0}', "
+            "'{\"r\":0,\"g\":0,\"b\":0}', '{\"r\":0,\"g\":0,\"b\":0}', 'RGB', '2026-01-01', '2026-01-01')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO projects (id, name, kind, year, month, page_size, orientation, margin_mm, locale, week_start, "
+            "font_family, day_number_align, title_color, month_name_color, day_name_color, day_number_color, "
+            "week_number_color, color_mode, created_at, updated_at) VALUES "
+            "(2, 'old year', 'year', 2027, NULL, 'A1', 'portrait', 10, 'en', 0, 'DejaVuSans', 'center', "
+            "'{\"r\":0,\"g\":0,\"b\":0}', '{\"r\":0,\"g\":0,\"b\":0}', '{\"r\":0,\"g\":0,\"b\":0}', "
+            "'{\"r\":0,\"g\":0,\"b\":0}', '{\"r\":0,\"g\":0,\"b\":0}', 'RGB', '2026-01-01', '2026-01-01')"
+        )
+    old_engine, old_session = dbmod.engine, dbmod.SessionLocal
+    dbmod.engine = eng
+    dbmod.SessionLocal = sessionmaker(bind=eng, expire_on_commit=False)
+    try:
+        dbmod._add_missing_columns()
+        with eng.connect() as conn:
+            month_row = conn.execute(text("SELECT day_number_valign, day_name_valign FROM projects WHERE id = 1")).one()
+            assert month_row == ("top", "top")  # preserves the pre-upgrade planner look
+            year_row = conn.execute(text("SELECT day_number_valign, day_name_valign FROM projects WHERE id = 2")).one()
+            assert year_row == ("middle", "middle")  # year calendars keep the generic default
+    finally:
+        dbmod.engine, dbmod.SessionLocal = old_engine, old_session
+
+
 def test_settings_autosave_returns_json(client):
     r = client.post("/projects", data={"name": "Auto", "year": "2027"}, follow_redirects=False)
     url = r.headers["location"]
