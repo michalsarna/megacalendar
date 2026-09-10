@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} · megacalendar{% endblock %}
+
+{% macro color(name, value, nullable=False) %}
+  {% set on = (not nullable) or (value is not none) %}
+  <div class="color" data-color="{{ name }}" data-mode="{{ project.color_mode }}">
+    {% if nullable %}<input type="checkbox" name="{{ name }}_enabled" {% if on %}checked{% endif %} title="Enable">{% endif %}
+    {% if project.color_mode == "RGB" %}
+      <input type="color" class="picker" name="{{ name }}" value="{{ to_hex(value) }}" {% if not on %}disabled{% endif %}>
+      <code class="hex">{{ to_hex(value) }}</code>
+    {% else %}
+      {% set v = value or {"c":0,"m":0,"y":0,"k":0} %}
+      {% for ch in ["c","m","y","k"] %}
+        <input type="number" name="{{ name }}_{{ ch }}" min="0" max="100" step="0.5" value="{{ v[ch] }}" title="{{ ch|upper }} %" {% if not on %}disabled{% endif %}>
+      {% endfor %}
+      <span class="swatch-wrap"><span class="swatch" title="Click to pick a colour"></span><input type="color" class="picker hidden-picker" value="{{ to_hex(value) }}" tabindex="-1"></span>
+    {% endif %}
+  </div>
+{% endmacro %}
+{% macro swatch_cell(value, none_text) %}{% if value %}<span class="swatch mini" style="background:{{ to_hex(value) }}"></span> {% if "r" in value %}{{ to_hex(value) }}{% else %}C{{ value.c }} M{{ value.m }} Y{{ value.y }} K{{ value.k }}{% endif %}{% else %}{{ none_text }}{% endif %}{% endmacro %}
+
+{% block content %}
+{% set is_table = project.layout == "columns" %}
+{% set day_names_off = is_table and not project.table_day_names %}
+{% set per_day_names_off = day_names_off or not is_table %}
+{% if request.query_params.get("saved") %}<div class="ok">Saved.</div>{% endif %}
+<noscript><div class="errors">Autosave needs JavaScript; use the “Save project” button.</div></noscript>
+
+<form method="post" action="/projects/{{ project.id }}" id="settings">
+  <input type="hidden" name="form_color_mode" value="{{ project.color_mode }}">
+
+  <fieldset>
+    <legend>Project</legend>
+    <div class="row">
+      <label>Name <input name="name" value="{{ project.name }}" required maxlength="200"></label>
+      <label>Year <input name="year" type="number" min="1900" max="2200" value="{{ project.year }}" required></label>
+    </div>
+  </fieldset>
+
+  <fieldset id="header">
+    <legend>Header (title, year, logo)</legend>
+    <div class="row">
+      <label>Title <input name="title" value="{{ project.title or '' }}" placeholder="{{ project.year }}"></label>
+      <label>Title alignment
+        <select name="title_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.title_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <div class="field"><span>Title colour</span>{{ color("title_color", project.title_color) }}</div>
+      <span class="hint">Without a title the year is printed as the title.</span>
+    </div>
+    <div class="row{% if not project.title %} dimmed{% endif %}" id="year-options" style="margin-top:.8rem"{% if not project.title %} inert{% endif %}>
+      <label class="inline"><input type="checkbox" name="show_year" {% if project.show_year %}checked{% endif %}> Also show the year</label>
+      <label>Year alignment
+        <select name="year_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.year_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <div class="field"><span>Year colour (untick = same as title)</span>{{ color("year_color", project.year_color, nullable=True) }}</div>
+      <span class="hint">Same alignment as the title puts the year underneath it.</span>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>Logo
+        <select name="logo_asset_id">
+          <option value="">— none —</option>
+          {% for a in assets %}<option value="{{ a.id }}" {% if a.id == project.logo_asset_id %}selected{% endif %}>{{ a.original_name }} ({{ a.suffix[1:]|upper }}{% if a.width %}, {{ a.width }}×{{ a.height }}px{% endif %})</option>{% endfor %}
+        </select></label>
+      <label>Logo position
+        <select name="logo_align" id="logo-align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.logo_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <label>Logo opacity (%) <input name="logo_opacity" type="number" min="0" max="100" step="1" value="{{ project.logo_opacity|int }}"></label>
+      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=logo">Upload a new logo…</a>
+    </div>
+    <p class="hint">The logo is scaled to the height of the header band (width capped at 30% of the sheet). It can only take a position not used by the title or the year.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Sheet</legend>
+    <div class="row">
+      <label>Size
+        <select name="page_size">{% for code, ps in page_sizes.items() %}
+          <option value="{{ code }}" {% if code == project.page_size %}selected{% endif %}>{{ code }} ({{ ps.width_mm|int }} × {{ ps.height_mm|int }} mm)</option>{% endfor %}
+        </select></label>
+      <label>Orientation
+        <select name="orientation">{% for o in orientations %}<option value="{{ o }}" {% if o == project.orientation %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
+      <label>Layout
+        <select name="layout">
+          <option value="grid" {% if not is_table %}selected{% endif %}>Month grids (3×4 / 4×3)</option>
+          <option value="columns" {% if is_table %}selected{% endif %}>Table style (one column per month)</option>
+        </select></label>
+      <label>Margin (mm, max {{ max_margin_mm }}) <input name="margin_mm" type="number" min="0" max="{{ max_margin_mm }}" step="0.5" value="{{ project.margin_mm }}"></label>
+      <label>Font
+        <select name="font_family">{% for f in fonts %}<option value="{{ f }}" {% if f == project.font_family %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
+      <label>Colour model
+        <select name="color_mode">{% for m in color_modes %}<option value="{{ m }}" {% if m == project.color_mode %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+    </div>
+    <p class="hint">RGB for screen/office printing, CMYK for a print shop. Switching the colour model converts all existing colours (approximately) on save.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Calendar</legend>
+    <div class="row">
+      <label>Language
+        <select name="locale">
+          {% set known = languages|map(attribute=0)|list %}
+          {% if project.locale not in known %}<option value="{{ project.locale }}" selected>{{ project.locale }}</option>{% endif %}
+          {% for code, name in languages %}<option value="{{ code }}" {% if code == project.locale %}selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select></label>
+      <label>Week starts on
+        <select name="week_start">
+          <option value="0" {% if project.week_start == 0 %}selected{% endif %}>Monday</option>
+          <option value="6" {% if project.week_start == 6 %}selected{% endif %}>Sunday</option>
+          <option value="5" {% if project.week_start == 5 %}selected{% endif %}>Saturday</option>
+        </select></label>
+      <label class="inline"><input type="checkbox" name="show_week_numbers" {% if project.show_week_numbers %}checked{% endif %}> Show ISO week numbers</label>
+      <label class="inline"><input type="checkbox" name="show_legend" {% if project.show_legend %}checked{% endif %}> Legend of private holidays at the bottom</label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Months</legend>
+    <div class="row">
+      <div class="field"><span>Month names colour</span>{{ color("month_name_color", project.month_name_color) }}</div>
+      <label class="inline"><input type="checkbox" name="month_names_uppercase" {% if project.month_names_uppercase %}checked{% endif %}> MONTH NAMES in upper case</label>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <div class="field"><span>Month border colour (untick = no border)</span>{{ color("month_border_color", project.month_border_color, nullable=True) }}</div>
+      <label>Month border width (mm) <input name="month_border_width_mm" type="number" min="0.1" max="5" step="0.1" value="{{ project.month_border_width_mm }}"></label>
+      <label>Space between months (mm, blank = automatic, max {{ month_gap_limit }})
+        <input name="month_gap_mm" type="number" min="0" max="{{ month_gap_limit }}" step="0.5" value="{{ project.month_gap_mm if project.month_gap_mm is not none else '' }}" placeholder="auto"></label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Days</legend>
+    <div class="row">
+      <div class="field"><span>Day numbers colour</span>{{ color("day_number_color", project.day_number_color) }}</div>
+      <label>Day number size (% of automatic) <input name="day_number_scale" type="number" min="25" max="300" step="5" value="{{ project.day_number_scale|int }}"></label>
+      <div class="field"><span>Week numbers colour</span>{{ color("week_number_color", project.week_number_color) }}</div>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <span class="table-only{% if not is_table %} dimmed{% endif %}" {% if not is_table %}inert{% endif %}>
+        <label class="inline"><input type="checkbox" name="table_day_names" {% if project.table_day_names %}checked{% endif %}> Show day names next to day numbers (Table style)</label>
+      </span>
+      <div class="field{% if day_names_off %} dimmed{% endif %}" data-dayname="all"{% if day_names_off %} inert{% endif %}><span>Day names colour</span>{{ color("day_name_color", project.day_name_color) }}</div>
+      <label class="inline" data-dayname="all"{% if day_names_off %} inert{% endif %}><input type="checkbox" name="day_names_uppercase" {% if project.day_names_uppercase %}checked{% endif %}> DAY NAMES in upper case</label>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <div class="field"><span>Mon–Fri background (untick = paper)</span>{{ color("weekday_color", project.weekday_color, nullable=True) }}</div>
+      <div class="field"><span>Sat–Sun background (untick = paper)</span>{{ color("weekend_color", project.weekend_color, nullable=True) }}</div>
+    </div>
+    <div class="row table-only{% if not is_table %} dimmed{% endif %}" style="margin-top:.8rem"{% if not is_table %} inert{% endif %}>
+      <div class="field"><span>Day border colour (untick = no border, Table style)</span>{{ color("day_border_color", project.day_border_color, nullable=True) }}</div>
+      <label>Day border width (mm) <input name="day_border_width_mm" type="number" min="0.1" max="3" step="0.1" value="{{ project.day_border_width_mm }}"></label>
+    </div>
+    <p class="hint">Click a swatch to pick a colour. Public and private holidays below override these for their days.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Public holidays</legend>
+    <div class="row">
+      <label class="inline"><input type="checkbox" name="holidays_enabled" {% if project.holidays_enabled %}checked{% endif %}> Colour public holidays</label>
+      <label>Country
+        <select name="holiday_country"><option value="">—</option>{% for c in countries %}<option value="{{ c }}" {% if c == project.holiday_country %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+      <label>Region / subdivision (optional) <input name="holiday_subdiv" value="{{ project.holiday_subdiv or '' }}" placeholder="e.g. BY"></label>
+      <div class="field"><span>Holiday background (untick = none)</span>{{ color("holiday_color", project.holiday_color, nullable=True) }}</div>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <div class="field"><span>Holiday day number colour (untick = normal)</span>{{ color("holiday_day_number_color", project.holiday_day_number_color, nullable=True) }}</div>
+      <div class="field{% if per_day_names_off %} dimmed{% endif %}" data-dayname="perday"{% if per_day_names_off %} inert{% endif %}><span>Holiday day name colour (untick = normal, Table style)</span>{{ color("holiday_day_name_color", project.holiday_day_name_color, nullable=True) }}</div>
+    </div>
+  </fieldset>
+
+  <fieldset id="background">
+    <legend>Background artwork</legend>
+    <div class="row">
+      <label>Background from library
+        <select name="background_asset_id">
+          <option value="">— none —</option>
+          {% for a in assets %}<option value="{{ a.id }}" {% if a.id == project.background_asset_id %}selected{% endif %}>{{ a.original_name }} ({{ a.suffix[1:]|upper }}{% if a.width %}, {{ a.width }}×{{ a.height }}px{% endif %})</option>{% endfor %}
+        </select></label>
+      <label>Fit <select name="background_mode">{% for m in background_modes %}<option value="{{ m }}" {% if m == project.background_mode %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+      <label>Opacity (%) <input name="background_opacity" type="number" min="0" max="100" step="1" value="{{ project.background_opacity|int }}"></label>
+      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=background">Upload a new background…</a>
+    </div>
+    <p class="hint">Lower opacity fades the artwork towards the paper. Manage the shared library on the <a href="/#backgrounds">start page</a>.</p>
+  </fieldset>
+</form>
+
+{% set default_bg = project.weekend_color or ({"c":0,"m":0,"y":0,"k":12} if project.color_mode == "CMYK" else {"r":224,"g":224,"b":224}) %}
+<h2 id="days">Private holidays</h2>
+<p class="hint">Single days with their own background and text colours. They beat public holidays and weekends, and appear in the legend when it is enabled. Click a row to load it into the form.</p>
+<form method="post" action="/projects/{{ project.id }}/days" id="private-holiday">
+  <input type="hidden" name="form_color_mode" value="{{ project.color_mode }}">
+  <fieldset>
+    <div class="row">
+      <label>Month
+        <select name="month" id="ov-month">{% for m in range(1, 13) %}<option value="{{ m }}">{{ month_names[m] }}</option>{% endfor %}</select></label>
+      <label>Day
+        <select name="day_of_month" id="ov-day">{% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></label>
+      <span class="hint">Year {{ project.year }}</span>
+      <label>Note <input name="note" maxlength="200" placeholder="Company day off"></label>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <div class="field"><span>Background (untick = no background)</span>{{ color("ov_color", default_bg, nullable=True) }}</div>
+      <div class="field"><span>Day number colour (untick = normal)</span>{{ color("ov_number_color", none, nullable=True) }}</div>
+      <div class="field{% if per_day_names_off %} dimmed{% endif %}" data-dayname="perday"{% if per_day_names_off %} inert{% endif %}><span>Day name colour (untick = normal, Table style)</span>{{ color("ov_name_color", none, nullable=True) }}</div>
+      <button type="submit" id="ov-submit">Add day</button>
+      <button type="button" id="ov-reset" hidden>New entry</button>
+    </div>
+  </fieldset>
+</form>
+{% if project.day_overrides %}
+<table id="ov-list">
+  <thead><tr><th>Date</th><th>Background</th><th>Day number</th><th>Day name</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {% for o in project.day_overrides %}
+    <tr class="clickable" data-day="{{ o.day }}" data-note="{{ o.note or '' }}" data-color='{{ o.color|tojson }}' data-number='{{ o.day_number_color|tojson }}' data-name='{{ o.day_name_color|tojson }}' title="Click to edit">
+      <td>{{ o.day }}</td>
+      <td>{{ swatch_cell(o.color, "none (paper)") }}</td>
+      <td>{{ swatch_cell(o.day_number_color, "normal") }}</td>
+      <td>{{ swatch_cell(o.day_name_color, "normal") }}</td>
+      <td>{{ o.note or "" }}</td>
+      <td><form method="post" action="/projects/{{ project.id }}/days/{{ o.day }}/delete"><button type="submit">Remove</button></form></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="hint">No private holidays yet.</p>{% endif %}
+
+<div class="actions bottom">
+  <button class="primary" type="submit" form="settings">Save project</button>
+  <span id="save-status">Changes are saved automatically.</span>
+  <a class="btn" href="/projects/{{ project.id }}/pdf">Download print PDF</a>
+  <form class="inline" method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Delete project “{{ project.name }}”? This cannot be undone.')" style="margin-left:auto">
+    <button class="danger" type="submit">Delete project</button>
+  </form>
+  <span class="hint" style="flex-basis:100%">{{ project.page_size }} {{ project.orientation }} · {{ project.color_mode }} · fonts and artwork embedded</span>
+</div>
+
+<script>
+// ---- Colour widgets: enable/disable for optional colours, native colour picker, CMYK <-> hex conversion.
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, +v || 0));
+const cmykToHex = (c, m, y, k) => '#' + [c, m, y].map(ch =>
+  Math.round(255 * (1 - clamp(ch, 0, 100) / 100) * (1 - clamp(k, 0, 100) / 100)).toString(16).padStart(2, '0')).join('');
+const hexToCmyk = hex => {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const k = 1 - Math.max(r, g, b);
+  if (k >= 1) return [0, 0, 0, 100];
+  return [(1 - r - k) / (1 - k), (1 - g - k) / (1 - k), (1 - b - k) / (1 - k), k].map(v => Math.round(v * 100));
+};
+const rgbToHex = c => '#' + [c.r, c.g, c.b].map(v => (+v).toString(16).padStart(2, '0')).join('');
+const widgets = {};  // name -> { set(value|null) }
+document.querySelectorAll('[data-color]').forEach(box => {
+  const toggle = box.querySelector('input[type=checkbox]');
+  const picker = box.querySelector('.picker');
+  const numbers = [...box.querySelectorAll('input[type=number]')];
+  const swatch = box.querySelector('.swatch');
+  const hexLabel = box.querySelector('.hex');
+  const paint = () => {
+    const on = !toggle || toggle.checked;
+    numbers.forEach(i => i.disabled = !on);
+    picker.disabled = !on;
+    if (box.dataset.mode === 'RGB') {
+      if (hexLabel) hexLabel.textContent = on ? picker.value : 'none';
+    } else {
+      const hex = cmykToHex(...numbers.map(i => i.value));
+      picker.value = hex;
+      swatch.style.background = on ? hex : 'transparent';
+      swatch.style.backgroundImage = on ? '' : 'repeating-linear-gradient(45deg,#ccc 0 2px,transparent 2px 6px)';
+    }
+  };
+  numbers.forEach(i => i.addEventListener('input', paint));
+  toggle && toggle.addEventListener('change', paint);
+  picker.addEventListener('input', () => {
+    if (box.dataset.mode === 'CMYK') hexToCmyk(picker.value).forEach((v, i) => numbers[i].value = v);
+    paint();
+  });
+  swatch && swatch.addEventListener('click', () => { if (!picker.disabled) picker.click(); });
+  // Programmatic setter used when loading a private holiday into its form. value: null | {r,g,b} | {c,m,y,k}
+  widgets[box.dataset.color] = { set(value) {
+    if (toggle) toggle.checked = value !== null;
+    if (value !== null) {
+      if (box.dataset.mode === 'RGB') picker.value = 'r' in value ? rgbToHex(value) : cmykToHex(value.c, value.m, value.y, value.k);
+      else if ('c' in value) ['c', 'm', 'y', 'k'].forEach((ch, i) => numbers[i].value = value[ch]);
+      else hexToCmyk(rgbToHex(value)).forEach((v, i) => numbers[i].value = v);
+    }
+    paint();
+  } };
+  paint();
+});
+
+// ---- Sections that do not apply are dimmed and inert (never disabled: disabled inputs drop out of the post).
+(() => {
+  const layout = document.querySelector('[name=layout]');
+  const tableDayNames = document.querySelector('[name=table_day_names]');
+  const title = document.querySelector('[name=title]');
+  const setOff = (el, off) => { el.classList.toggle('dimmed', off); el.inert = off; };
+  const sync = () => {
+    const isTable = layout.value === 'columns';
+    const dayNamesOff = isTable && !tableDayNames.checked;   // day names hidden in table style
+    document.querySelectorAll('.table-only').forEach(el => setOff(el, !isTable));
+    document.querySelectorAll('[data-dayname="all"]').forEach(el => setOff(el, dayNamesOff));
+    document.querySelectorAll('[data-dayname="perday"]').forEach(el => setOff(el, dayNamesOff || !isTable));  // per-day names exist only in table style
+    setOff(document.getElementById('year-options'), !title.value.trim());
+    // Logo may only take a free position in the title band.
+    const taken = new Set([titleAlign.value]);
+    if (title.value.trim() && showYear.checked) taken.add(yearAlign.value);
+    [...logoAlign.options].forEach(o => { o.disabled = taken.has(o.value); o.textContent = o.value + (taken.has(o.value) ? ' (taken)' : ''); });
+    if (taken.has(logoAlign.value)) {
+      const free = [...logoAlign.options].find(o => !o.disabled);
+      if (free && logoAlign.value !== free.value) { logoAlign.value = free.value; logoAlign.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+  };
+  const titleAlign = document.querySelector('[name=title_align]'), yearAlign = document.querySelector('[name=year_align]');
+  const showYear = document.querySelector('[name=show_year]'), logoAlign = document.getElementById('logo-align');
+  [layout, tableDayNames, titleAlign, yearAlign, showYear].forEach(el => el.addEventListener('change', sync));
+  title.addEventListener('input', sync);
+  sync();
+})();
+
+// ---- Private holidays: month/day picker limited to real dates; click a row to edit it.
+(() => {
+  const form = document.getElementById('private-holiday');
+  const month = document.getElementById('ov-month'), day = document.getElementById('ov-day');
+  const note = form.querySelector('[name=note]'), submit = document.getElementById('ov-submit'), reset = document.getElementById('ov-reset');
+  const limit = () => {
+    const days = new Date({{ project.year }}, +month.value, 0).getDate();
+    [...day.options].forEach(o => { o.hidden = o.disabled = +o.value > days; });
+    if (+day.value > days) day.value = days;
+  };
+  month.addEventListener('change', limit);
+  limit();
+  const defaults = { color: {{ default_bg|tojson }}, number: null, name: null };
+  const load = row => {
+    const [, m, d] = row.dataset.day.split('-');
+    month.value = +m; limit(); day.value = +d;
+    note.value = row.dataset.note;
+    widgets.ov_color.set(JSON.parse(row.dataset.color));
+    widgets.ov_number_color.set(JSON.parse(row.dataset.number));
+    widgets.ov_name_color.set(JSON.parse(row.dataset.name));
+    submit.textContent = 'Update ' + row.dataset.day;
+    reset.hidden = false;
+    document.querySelectorAll('#ov-list tr.selected').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  document.querySelectorAll('#ov-list tr.clickable').forEach(row => row.addEventListener('click', e => {
+    if (e.target.closest('form, button')) return;  // the Remove button keeps its own behaviour
+    load(row);
+  }));
+  reset.addEventListener('click', () => {
+    note.value = ''; month.value = 1; limit(); day.value = 1;
+    widgets.ov_color.set(defaults.color); widgets.ov_number_color.set(null); widgets.ov_name_color.set(null);
+    submit.textContent = 'Add day'; reset.hidden = true;
+    document.querySelectorAll('#ov-list tr.selected').forEach(r => r.classList.remove('selected'));
+  });
+})();
+
+// ---- Autosave: every change in the settings form is posted in the background, so uploading a
+// background or adding a private holiday (separate forms that reload the page) never loses edits.
+(() => {
+  const form = document.getElementById('settings');
+  const status = document.getElementById('save-status');
+  let timer = null, dirty = false, inflight = null;
+  const show = (text, cls) => { status.textContent = text; status.className = cls || ''; };
+
+  async function save() {
+    clearTimeout(timer); timer = null;
+    if (inflight) await inflight;
+    const renderedMode = form.querySelector('[name=form_color_mode]').value;
+    const chosenMode = form.querySelector('[name=color_mode]').value;
+    show('Saving…');
+    inflight = fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } })
+      .then(async res => {
+        const data = await res.json().catch(() => ({ ok: false, errors: ['unexpected server response'] }));
+        if (data.ok) {
+          dirty = false;
+          show('Saved ' + new Date().toLocaleTimeString(), 'ok');
+          if (chosenMode !== renderedMode) location.reload();  // colour widgets differ per model
+        } else {
+          show('Not saved: ' + (data.errors || []).join(' · '), 'error');
+        }
+        return data.ok;
+      })
+      .catch(() => { show('Not saved: network error', 'error'); return false; })
+      .finally(() => { inflight = null; });
+    return inflight;
+  }
+  const schedule = delay => { dirty = true; show('Unsaved changes…'); clearTimeout(timer); timer = setTimeout(save, delay); };
+
+  form.addEventListener('input', e => schedule(e.target.type === 'color' ? 400 : 800));
+  form.addEventListener('change', e => {
+    if (e.target.tagName === 'SELECT' || e.target.type === 'checkbox' || e.target.type === 'number' || e.target.type === 'date') schedule(0);
+  });
+  form.addEventListener('submit', e => { e.preventDefault(); save(); });
+
+  // Other forms on the page (upload, detach, private holidays, delete): flush pending edits first.
+  document.querySelectorAll('form:not(#settings)').forEach(other => {
+    other.addEventListener('submit', async e => {
+      if (!dirty && !timer && !inflight) return;
+      e.preventDefault();
+      if (await save()) other.submit();
+    });
+  });
+  window.addEventListener('beforeunload', e => { if (dirty || timer) { e.preventDefault(); e.returnValue = ''; } });
+})();
+</script>
+{% endblock %}

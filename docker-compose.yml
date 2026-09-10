@@ -1,0 +1,78 @@
+# Three ways to run, selected with --profile:
+#   docker compose --profile sqlite   up --build     app + SQLite file in the megacalendar-data volume
+#   docker compose --profile postgres up --build     app + PostgreSQL 16 (admin / admin)
+#   docker compose --profile mysql    up --build     app + MySQL 8 (admin / admin)
+# Uploaded artwork always lives in the megacalendar-data volume, whichever database is used.
+services:
+  app-sqlite:
+    build: .
+    profiles: ["sqlite"]
+    ports: ["8000:8000"]
+    volumes: ["megacalendar-data:/data"]
+    environment:
+      DB_TYPE: sqlite
+
+  postgres:
+    image: postgres:16
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: megacalendar
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d megacalendar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app-postgres:
+    build: .
+    profiles: ["postgres"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8000:8000"]
+    volumes: ["megacalendar-data:/data"]
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: megacalendar
+      DB_USER: admin
+      DB_PASSWORD: admin
+
+  mysql:
+    image: mysql:8
+    profiles: ["mysql"]
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_DATABASE: megacalendar
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: admin
+      MYSQL_ROOT_PASSWORD: admin
+    volumes: ["mysql-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uadmin", "-padmin"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  app-mysql:
+    build: .
+    profiles: ["mysql"]
+    depends_on:
+      mysql: { condition: service_healthy }
+    ports: ["8000:8000"]
+    volumes: ["megacalendar-data:/data"]
+    environment:
+      DB_TYPE: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: megacalendar
+      DB_USER: admin
+      DB_PASSWORD: admin
+
+volumes:
+  megacalendar-data:
+  postgres-data:
+  mysql-data:

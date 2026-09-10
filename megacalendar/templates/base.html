@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}megacalendar{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1><a href="/">megacalendar</a></h1>
+  <span class="hint">print-ready A0/A1 wall calendars</span>
+  <a href="/docs" style="margin-left:auto">API docs</a>
+</header>
+<main>
+  {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

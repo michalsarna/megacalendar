@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}New project · megacalendar{% endblock %}
+{% block content %}
+{% set v = values or {} %}
+<h2>New project</h2>
+<form method="post" action="/projects">
+  <fieldset>
+    <div class="row">
+      <label>Name <input name="name" required maxlength="200" placeholder="Office wall {{ next_year }}" value="{{ v.get('name', '') }}" autofocus></label>
+      <label>Year <input name="year" type="number" min="1900" max="2200" value="{{ v.get('year', next_year) }}" required></label>
+      <label>Sheet <select name="page_size">{% for code, ps in page_sizes.items() %}<option value="{{ code }}" {% if v.get('page_size', 'A1') == code %}selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
+      <label>Orientation <select name="orientation">{% for o in orientations %}<option value="{{ o }}" {% if v.get('orientation', 'portrait') == o %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
+      <label>Layout
+        <select name="layout">
+          <option value="grid" {% if v.get('layout', 'grid') == 'grid' %}selected{% endif %}>Month grids</option>
+          <option value="columns" {% if v.get('layout') == 'columns' %}selected{% endif %}>Table style</option>
+        </select></label>
+      <label>Colour model <select name="color_mode">{% for m in color_modes %}<option value="{{ m }}" {% if v.get('color_mode', 'RGB') == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+    </div>
+  </fieldset>
+  <div class="actions">
+    <button class="primary" type="submit">Create project</button>
+    <a class="btn" href="/">Cancel</a>
+    <span class="hint">Everything else can be changed afterwards in the project editor.</span>
+  </div>
+</form>
+{% endblock %}
