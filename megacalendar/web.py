@@ -25,6 +25,8 @@ router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 LAYOUT_LABELS = {"grid": "Month grids", "columns": "Table style"}
+FONT_FIELDS = ("title_font", "year_font", "month_name_font", "day_name_font", "day_number_font", "legend_font")
+SCALE_FIELDS = ("title_scale", "year_scale", "month_name_scale", "day_name_scale", "legend_scale")
 COLOR_FIELDS = ("title_color", "month_name_color", "day_name_color", "day_number_color", "week_number_color",
                 "weekday_color", "weekend_color", "holiday_color", "month_border_color", "day_border_color",
                 "holiday_day_number_color", "holiday_day_name_color", "year_color")
@@ -73,6 +75,8 @@ def _parse_project_form(form: FormData) -> dict:
         "locale": form.get("locale"),
         "week_start": form.get("week_start"),
         "font_family": form.get("font_family"),
+        **{key: form.get(key) or None for key in FONT_FIELDS},
+        **{key: form.get(key) for key in SCALE_FIELDS},
         "show_week_numbers": form.get("show_week_numbers") is not None,
         "show_year": form.get("show_year") is not None,
         "year_align": form.get("year_align"),
@@ -96,7 +100,7 @@ def _parse_project_form(form: FormData) -> dict:
     # Absent scalar fields fall back to schema defaults instead of failing validation.
     for key in ("year", "page_size", "orientation", "margin_mm", "locale", "week_start", "font_family",
                 "background_mode", "month_border_width_mm", "color_mode", "background_opacity", "title_align", "layout",
-                "day_number_scale", "day_border_width_mm", "year_align", "logo_align", "logo_opacity"):
+                "day_number_scale", "day_border_width_mm", "year_align", "logo_align", "logo_opacity", *SCALE_FIELDS):
         if data[key] is None:
             del data[key]
     return data

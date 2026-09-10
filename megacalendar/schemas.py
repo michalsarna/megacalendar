@@ -114,6 +114,17 @@ class ProjectBase(BaseModel):
     month_names_uppercase: bool = False
     day_names_uppercase: bool = False
     day_number_scale: float = Field(default=100, ge=25, le=300)
+    title_font: str | None = None
+    title_scale: float = Field(default=100, ge=25, le=300)
+    year_font: str | None = None
+    year_scale: float = Field(default=100, ge=25, le=300)
+    month_name_font: str | None = None
+    month_name_scale: float = Field(default=100, ge=25, le=300)
+    day_name_font: str | None = None
+    day_name_scale: float = Field(default=100, ge=25, le=300)
+    day_number_font: str | None = None
+    legend_font: str | None = None
+    legend_scale: float = Field(default=100, ge=25, le=300)
     table_day_names: bool = True
     month_gap_mm: float | None = Field(default=None, ge=0, le=500)
     show_legend: bool = False
@@ -240,9 +251,14 @@ class ProjectBase(BaseModel):
             raise ValueError(f"background_mode must be one of {BACKGROUND_MODES}")
         return v
 
-    @field_validator("font_family")
+    @field_validator("font_family", "title_font", "year_font", "month_name_font", "day_name_font", "day_number_font",
+                     "legend_font", mode="before")
     @classmethod
-    def _font(cls, v: str) -> str:
+    def _font(cls, v, info):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            if info.field_name == "font_family":
+                raise ValueError("font_family is required")
+            return None
         if v not in available_families():
             raise ValueError(f"unknown font family {v!r}; available: {available_families()}")
         return v

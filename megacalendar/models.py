@@ -36,6 +36,18 @@ class Project(Base):
     month_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_number_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    # Per-element typography; font None = font_family
+    title_font: Mapped[str | None] = mapped_column(String(100))
+    title_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    year_font: Mapped[str | None] = mapped_column(String(100))
+    year_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    month_name_font: Mapped[str | None] = mapped_column(String(100))
+    month_name_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    day_name_font: Mapped[str | None] = mapped_column(String(100))
+    day_name_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    day_number_font: Mapped[str | None] = mapped_column(String(100))
+    legend_font: Mapped[str | None] = mapped_column(String(100))
+    legend_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     table_day_names: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
     month_gap_mm: Mapped[float | None] = mapped_column(Float)  # None = automatic
     show_legend: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())

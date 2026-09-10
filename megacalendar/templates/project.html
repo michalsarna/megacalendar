@@ -19,8 +19,28 @@
 {% endmacro %}
 {% macro swatch_cell(value, none_text) %}{% if value %}<span class="swatch mini" style="background:{{ to_hex(value) }}"></span> {% if "r" in value %}{{ to_hex(value) }}{% else %}C{{ value.c }} M{{ value.m }} Y{{ value.y }} K{{ value.k }}{% endif %}{% else %}{{ none_text }}{% endif %}{% endmacro %}
 
+{% block head %}
+<style>
+{% for f in fonts %}@font-face { font-family: "mc-{{ f }}"; src: url("/fonts/{{ f }}.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "mc-{{ f }}"; src: url("/fonts/{{ f }}-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+{% endfor %}
+</style>
+{% endblock %}
+
+{% macro font_select(name, value, sample, bold=False) %}
+  <span class="fontpick">
+    <select name="{{ name }}" class="font-select" data-bold="{{ 1 if bold else 0 }}" data-default="{{ 'project' if name != 'font_family' else '' }}">
+      {% if name != "font_family" %}<option value="" style="font-family:'mc-{{ project.font_family }}'" {% if not value %}selected{% endif %}>Default ({{ project.font_family }})</option>{% endif %}
+      {% for f in fonts %}<option value="{{ f }}" style="font-family:'mc-{{ f }}'" {% if f == value %}selected{% endif %}>{{ f }}</option>{% endfor %}
+    </select>
+    <span class="font-preview" style="font-family:'mc-{{ value or project.font_family }}';{% if bold %}font-weight:700{% endif %}">{{ sample }}</span>
+  </span>
+{% endmacro %}
+{% macro scale(name, value) %}<input name="{{ name }}" type="number" min="25" max="300" step="5" value="{{ value|int }}" title="% of the automatic size">{% endmacro %}
+
 {% block content %}
 {% set is_table = project.layout == "columns" %}
+{% set sample_month = month_names[1] %}
 {% set day_names_off = is_table and not project.table_day_names %}
 {% set per_day_names_off = day_names_off or not is_table %}
 {% if request.query_params.get("saved") %}<div class="ok">Saved.</div>{% endif %}
@@ -35,36 +55,6 @@
       <label>Name <input name="name" value="{{ project.name }}" required maxlength="200"></label>
       <label>Year <input name="year" type="number" min="1900" max="2200" value="{{ project.year }}" required></label>
     </div>
-  </fieldset>
-
-  <fieldset id="header">
-    <legend>Header (title, year, logo)</legend>
-    <div class="row">
-      <label>Title <input name="title" value="{{ project.title or '' }}" placeholder="{{ project.year }}"></label>
-      <label>Title alignment
-        <select name="title_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.title_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <div class="field"><span>Title colour</span>{{ color("title_color", project.title_color) }}</div>
-      <span class="hint">Without a title the year is printed as the title.</span>
-    </div>
-    <div class="row{% if not project.title %} dimmed{% endif %}" id="year-options" style="margin-top:.8rem"{% if not project.title %} inert{% endif %}>
-      <label class="inline"><input type="checkbox" name="show_year" {% if project.show_year %}checked{% endif %}> Also show the year</label>
-      <label>Year alignment
-        <select name="year_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.year_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <div class="field"><span>Year colour (untick = same as title)</span>{{ color("year_color", project.year_color, nullable=True) }}</div>
-      <span class="hint">Same alignment as the title puts the year underneath it.</span>
-    </div>
-    <div class="row" style="margin-top:.8rem">
-      <label>Logo
-        <select name="logo_asset_id">
-          <option value="">— none —</option>
-          {% for a in assets %}<option value="{{ a.id }}" {% if a.id == project.logo_asset_id %}selected{% endif %}>{{ a.original_name }} ({{ a.suffix[1:]|upper }}{% if a.width %}, {{ a.width }}×{{ a.height }}px{% endif %})</option>{% endfor %}
-        </select></label>
-      <label>Logo position
-        <select name="logo_align" id="logo-align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.logo_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <label>Logo opacity (%) <input name="logo_opacity" type="number" min="0" max="100" step="1" value="{{ project.logo_opacity|int }}"></label>
-      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=logo">Upload a new logo…</a>
-    </div>
-    <p class="hint">The logo is scaled to the height of the header band (width capped at 30% of the sheet). It can only take a position not used by the title or the year.</p>
   </fieldset>
 
   <fieldset>
@@ -82,8 +72,7 @@
           <option value="columns" {% if is_table %}selected{% endif %}>Table style (one column per month)</option>
         </select></label>
       <label>Margin (mm, max {{ max_margin_mm }}) <input name="margin_mm" type="number" min="0" max="{{ max_margin_mm }}" step="0.5" value="{{ project.margin_mm }}"></label>
-      <label>Font
-        <select name="font_family">{% for f in fonts %}<option value="{{ f }}" {% if f == project.font_family %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
+      <label>Font (project default) {{ font_select("font_family", project.font_family, "Aa Bb 12 " ~ month_names[1]) }}</label>
       <label>Colour model
         <select name="color_mode">{% for m in color_modes %}<option value="{{ m }}" {% if m == project.color_mode %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
     </div>
@@ -108,12 +97,54 @@
       <label class="inline"><input type="checkbox" name="show_week_numbers" {% if project.show_week_numbers %}checked{% endif %}> Show ISO week numbers</label>
       <label class="inline"><input type="checkbox" name="show_legend" {% if project.show_legend %}checked{% endif %}> Legend of private holidays at the bottom</label>
     </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>Legend font {{ font_select("legend_font", project.legend_font, "15 " ~ month_names[3][:3] ~ " – Company day") }}</label>
+      <label>Legend size (%) {{ scale("legend_scale", project.legend_scale) }}</label>
+    </div>
+  </fieldset>
+
+  <fieldset id="header">
+    <legend>Header (title, year, logo)</legend>
+    <div class="row">
+      <label>Title <input name="title" value="{{ project.title or '' }}" placeholder="{{ project.year }}"></label>
+      <label>Title alignment
+        <select name="title_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.title_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <div class="field"><span>Title colour</span>{{ color("title_color", project.title_color) }}</div>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>Title font {{ font_select("title_font", project.title_font, project.title or project.year, bold=True) }}</label>
+      <label>Title size (%) {{ scale("title_scale", project.title_scale) }}</label>
+      <span class="hint">Without a title the year is printed as the title.</span>
+    </div>
+    <div class="row{% if not project.title %} dimmed{% endif %}" id="year-options" style="margin-top:.8rem"{% if not project.title %} inert{% endif %}>
+      <label class="inline"><input type="checkbox" name="show_year" {% if project.show_year %}checked{% endif %}> Also show the year</label>
+      <label>Year alignment
+        <select name="year_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.year_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <div class="field"><span>Year colour (untick = same as title)</span>{{ color("year_color", project.year_color, nullable=True) }}</div>
+      <label>Year font {{ font_select("year_font", project.year_font, project.year) }}</label>
+      <label>Year size (%) {{ scale("year_scale", project.year_scale) }}</label>
+      <span class="hint">Same alignment as the title puts the year underneath it.</span>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>Logo
+        <select name="logo_asset_id">
+          <option value="">— none —</option>
+          {% for a in assets %}<option value="{{ a.id }}" {% if a.id == project.logo_asset_id %}selected{% endif %}>{{ a.original_name }} ({{ a.suffix[1:]|upper }}{% if a.width %}, {{ a.width }}×{{ a.height }}px{% endif %})</option>{% endfor %}
+        </select></label>
+      <label>Logo position
+        <select name="logo_align" id="logo-align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.logo_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <label>Logo opacity (%) <input name="logo_opacity" type="number" min="0" max="100" step="1" value="{{ project.logo_opacity|int }}"></label>
+      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=logo">Upload a new logo…</a>
+    </div>
+    <p class="hint">The logo is scaled to the height of the header band (width capped at 30% of the sheet). It can only take a position not used by the title or the year.</p>
   </fieldset>
 
   <fieldset>
     <legend>Months</legend>
     <div class="row">
       <div class="field"><span>Month names colour</span>{{ color("month_name_color", project.month_name_color) }}</div>
+      <label>Month names font {{ font_select("month_name_font", project.month_name_font, month_names[1], bold=True) }}</label>
+      <label>Month names size (%) {{ scale("month_name_scale", project.month_name_scale) }}</label>
       <label class="inline"><input type="checkbox" name="month_names_uppercase" {% if project.month_names_uppercase %}checked{% endif %}> MONTH NAMES in upper case</label>
     </div>
     <div class="row" style="margin-top:.8rem">
@@ -128,7 +159,8 @@
     <legend>Days</legend>
     <div class="row">
       <div class="field"><span>Day numbers colour</span>{{ color("day_number_color", project.day_number_color) }}</div>
-      <label>Day number size (% of automatic) <input name="day_number_scale" type="number" min="25" max="300" step="5" value="{{ project.day_number_scale|int }}"></label>
+      <label>Day numbers font {{ font_select("day_number_font", project.day_number_font, "1 2 3 14 31") }}</label>
+      <label>Day number size (%) {{ scale("day_number_scale", project.day_number_scale) }}</label>
       <div class="field"><span>Week numbers colour</span>{{ color("week_number_color", project.week_number_color) }}</div>
     </div>
     <div class="row" style="margin-top:.8rem">
@@ -136,6 +168,8 @@
         <label class="inline"><input type="checkbox" name="table_day_names" {% if project.table_day_names %}checked{% endif %}> Show day names next to day numbers (Table style)</label>
       </span>
       <div class="field{% if day_names_off %} dimmed{% endif %}" data-dayname="all"{% if day_names_off %} inert{% endif %}><span>Day names colour</span>{{ color("day_name_color", project.day_name_color) }}</div>
+      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names font {{ font_select("day_name_font", project.day_name_font, "Mon Tue Wed") }}</label>
+      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names size (%) {{ scale("day_name_scale", project.day_name_scale) }}</label>
       <label class="inline" data-dayname="all"{% if day_names_off %} inert{% endif %}><input type="checkbox" name="day_names_uppercase" {% if project.day_names_uppercase %}checked{% endif %}> DAY NAMES in upper case</label>
     </div>
     <div class="row" style="margin-top:.8rem">
@@ -282,6 +316,20 @@ document.querySelectorAll('[data-color]').forEach(box => {
   } };
   paint();
 });
+
+// ---- Font pickers: preview follows the selection; "Default" previews follow the project font.
+(() => {
+  const base = document.querySelector('[name=font_family]');
+  const pickers = [...document.querySelectorAll('.font-select')];
+  const family = sel => sel.value || base.value;
+  const paint = sel => { sel.parentElement.querySelector('.font-preview').style.fontFamily = `'mc-${family(sel)}'`; };
+  pickers.forEach(sel => sel.addEventListener('change', () => paint(sel)));
+  base.addEventListener('change', () => pickers.forEach(sel => {
+    const def = sel.querySelector('option[value=""]');
+    if (def) { def.textContent = `Default (${base.value})`; def.style.fontFamily = `'mc-${base.value}'`; }
+    paint(sel);
+  }));
+})();
 
 // ---- Sections that do not apply are dimmed and inert (never disabled: disabled inputs drop out of the post).
 (() => {

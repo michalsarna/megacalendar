@@ -12,7 +12,9 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
 - Two layouts: month grids (3×4 portrait, 4×3 landscape) or table style, one column per month with
   days as rows (portrait: two bands of six months, landscape: twelve columns). Table style can hide
   day names and draw a border around every day. Title aligned left, centre or right; month and day
-  names optionally upper-cased independently; day-number size adjustable as a percentage.
+  names optionally upper-cased independently. Title, year, month names, day names, day numbers and the
+  legend can each use their own font family and size (percent of the automatic size, capped so text never
+  overflows); the editor previews every font live via `@font-face` served from `/fonts/`.
 - Pure vector output via ReportLab; fonts are embedded TrueType.
 - Per-project colour model: RGB (default) or CMYK. The whole document uses one model; switching
   converts every stored colour (approximate formula, whole-percent CMYK, no ICC profiles). Colours may be given as

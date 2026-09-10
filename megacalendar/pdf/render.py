@@ -100,6 +100,31 @@ def compute_frame(spec: CalendarSpec) -> Frame:
     return Frame(page_w, page_h, margin, title_h=content_h * 0.07, gutter_x=gutter_x, gutter_y=gutter_y)
 
 
+# ---------------------------------------------------------------- fonts per element
+
+@dataclass(frozen=True)
+class FontSet:
+    base: FontPair
+    title: FontPair
+    year: FontPair
+    month: FontPair
+    day_name: FontPair
+    day_number: FontPair
+    legend: FontPair
+
+
+def resolve_fonts(spec: CalendarSpec) -> FontSet:
+    base = register_family(spec.font_family)
+    pick = lambda family: register_family(family) if family else base  # noqa: E731
+    return FontSet(base=base, title=pick(spec.title_font), year=pick(spec.year_font), month=pick(spec.month_name_font),
+                   day_name=pick(spec.day_name_font), day_number=pick(spec.day_number_font), legend=pick(spec.legend_font))
+
+
+def scaled(size: float, percent: float, cap: float) -> float:
+    """Apply a user percentage to an automatic size without letting text overflow its box."""
+    return min(size * percent / 100, cap)
+
+
 # ---------------------------------------------------------------- text helpers
 
 def fit_font_size(text: str, font: str, max_size: float, max_width: float) -> float:
@@ -189,39 +214,44 @@ def _draw_aligned(c: Canvas, text: str, font: str, size: float, align: str, fram
         c.drawCentredString(frame.page_w / 2, baseline, text)
 
 
-def _draw_title(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontPair, reserved_w: float = 0.0) -> None:
+def _draw_title(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontSet, reserved_w: float = 0.0) -> None:
     """reserved_w: width taken by the logo (plus a gap), which the text must not run into."""
     band_y = frame.page_h - frame.margin - frame.title_h
     avail_w = frame.content_w - reserved_w
+    title_font, year_font = fonts.title.bold, fonts.year.regular
     c.setFillColor(spec.paint(spec.title_color))
     title = spec.display_title
     if not (spec.title and spec.show_year):
-        size = fit_font_size(title, fonts.bold, frame.title_h * 0.8, avail_w)
-        _draw_aligned(c, title, fonts.bold, size, spec.title_align, frame, band_y, frame.title_h)
+        # Without a custom title the "title" is the year: use the year's font and size when set.
+        font, scale = (year_font, spec.year_scale) if not spec.title else (title_font, spec.title_scale)
+        size = fit_font_size(title, font, scaled(frame.title_h * 0.8, scale, frame.title_h * 0.95), avail_w)
+        _draw_aligned(c, title, font, size, spec.title_align, frame, band_y, frame.title_h)
         return
     year = str(spec.year)
     year_color = spec.paint(spec.year_color or spec.title_color)
     if spec.year_align == spec.title_align:
         # Same corner: year goes under the title.
         title_h, year_h = frame.title_h * 0.62, frame.title_h * 0.38
-        size = fit_font_size(title, fonts.bold, title_h * 0.8, avail_w)
-        _draw_aligned(c, title, fonts.bold, size, spec.title_align, frame, band_y + year_h, title_h)
+        size = fit_font_size(title, title_font, scaled(title_h * 0.8, spec.title_scale, title_h * 0.95), avail_w)
+        _draw_aligned(c, title, title_font, size, spec.title_align, frame, band_y + year_h, title_h)
         c.setFillColor(year_color)
-        _draw_aligned(c, year, fonts.regular, year_h * 0.8, spec.year_align, frame, band_y, year_h)
+        year_size = fit_font_size(year, year_font, scaled(year_h * 0.8, spec.year_scale, year_h * 0.95), avail_w)
+        _draw_aligned(c, year, year_font, year_size, spec.year_align, frame, band_y, year_h)
     else:
         # Different corners: side by side on one line, year a little smaller.
-        year_size = frame.title_h * 0.5
-        year_w = pdfmetrics.stringWidth(year, fonts.regular, year_size)
-        size = fit_font_size(title, fonts.bold, frame.title_h * 0.8, avail_w - year_w - frame.content_w * 0.04)
-        _draw_aligned(c, title, fonts.bold, size, spec.title_align, frame, band_y, frame.title_h)
+        year_size = scaled(frame.title_h * 0.5, spec.year_scale, frame.title_h * 0.95)
+        year_w = pdfmetrics.stringWidth(year, year_font, year_size)
+        size = fit_font_size(title, title_font, scaled(frame.title_h * 0.8, spec.title_scale, frame.title_h * 0.95),
+                             avail_w - year_w - frame.content_w * 0.04)
+        _draw_aligned(c, title, title_font, size, spec.title_align, frame, band_y, frame.title_h)
         c.setFillColor(year_color)
-        _draw_aligned(c, year, fonts.regular, year_size, spec.year_align, frame, band_y, frame.title_h)
+        _draw_aligned(c, year, year_font, year_size, spec.year_align, frame, band_y, frame.title_h)
 
 
 # ---------------------------------------------------------------- grid layout
 
 def _draw_month_grid(
-    c: Canvas, spec: CalendarSpec, fonts: FontPair, classifier: DayClassifier, month: int,
+    c: Canvas, spec: CalendarSpec, fonts: FontSet, classifier: DayClassifier, month: int,
     x: float, y_top: float, month_w: float, month_h: float, month_names: dict[int, str], day_names: dict[int, str],
     name_size: float,
 ) -> None:
@@ -235,21 +265,22 @@ def _draw_month_grid(
 
     # Month name
     c.setFillColor(spec.paint(spec.month_name_color))
-    _draw_centered(c, month_names[month], fonts.bold, name_size, x, y_top - header_h, month_w, header_h)
+    _draw_centered(c, month_names[month], fonts.month.bold, name_size, x, y_top - header_h, month_w, header_h)
 
     # Weekday abbreviations
     c.setFillColor(spec.paint(spec.day_name_color))
-    dow_size = dow_h * 0.5
+    dow_size = scaled(dow_h * 0.5, spec.day_name_scale, dow_h * 0.9)
     for label in ordered_days:
-        dow_size = min(dow_size, fit_font_size(label, fonts.regular, dow_size, cell_w * 0.9))
+        dow_size = min(dow_size, fit_font_size(label, fonts.day_name.regular, dow_size, cell_w * 0.9))
     dow_y = y_top - header_h - dow_h
     for i, label in enumerate(ordered_days):
-        _draw_centered(c, label, fonts.regular, dow_size, x + week_w + i * cell_w, dow_y, cell_w, dow_h)
+        _draw_centered(c, label, fonts.day_name.regular, dow_size, x + week_w + i * cell_w, dow_y, cell_w, dow_h)
 
     # Day cells
     weeks = calendar.Calendar(firstweekday=spec.week_start).monthdatescalendar(spec.year, month)
-    day_size = min(cell_h * 0.45, cell_w * 0.5) * spec.day_number_scale / 100
+    day_size = scaled(min(cell_h * 0.45, cell_w * 0.5), spec.day_number_scale, cell_h * 0.9)
     week_size = min(cell_h * 0.45, cell_w * 0.5) * 0.55
+    day_font = fonts.day_number.regular
     for r in range(min(DAY_ROWS, len(weeks))):
         cy = dow_y - (r + 1) * cell_h
         week = weeks[r]
@@ -258,7 +289,7 @@ def _draw_month_grid(
             continue
         if spec.show_week_numbers:
             c.setFillColor(spec.paint(spec.week_number_color))
-            _draw_centered(c, str(in_month[0].isocalendar()[1]), fonts.regular, week_size, x, cy, week_w, cell_h)
+            _draw_centered(c, str(in_month[0].isocalendar()[1]), day_font, week_size, x, cy, week_w, cell_h)
         for i, d in enumerate(week):
             if d.month != month:
                 continue
@@ -268,7 +299,7 @@ def _draw_month_grid(
                 c.setFillColor(spec.paint(bg))
                 c.rect(cx, cy, cell_w, cell_h, stroke=0, fill=1)
             c.setFillColor(spec.paint(classifier.day_number_color(d)))
-            _draw_centered(c, str(d.day), fonts.regular, day_size, cx, cy, cell_w, cell_h)
+            _draw_centered(c, str(d.day), day_font, day_size, cx, cy, cell_w, cell_h)
 
     _draw_border(c, spec, x, y_top - month_h, month_w, month_h)
 
@@ -277,7 +308,9 @@ def _draw_grid_layout(c, spec, frame, fonts, classifier, month_names, day_names)
     cols, rows = blocks_for(spec)
     month_w = (frame.content_w - (cols - 1) * frame.gutter_x) / cols
     month_h = (frame.grid_h - (rows - 1) * frame.gutter_y) / rows
-    name_size = shared_font_size(month_names.values(), fonts.bold, month_h * 0.14 * 0.55, month_w * 0.95)
+    header_h = month_h * 0.14
+    name_size = shared_font_size(month_names.values(), fonts.month.bold,
+                                 scaled(header_h * 0.55, spec.month_name_scale, header_h * 0.9), month_w * 0.95)
     for idx in range(12):
         col, row = idx % cols, idx // cols
         x = frame.margin + col * (month_w + frame.gutter_x)
@@ -288,7 +321,7 @@ def _draw_grid_layout(c, spec, frame, fonts, classifier, month_names, day_names)
 # ---------------------------------------------------------------- columns layout
 
 def _draw_month_column(
-    c: Canvas, spec: CalendarSpec, fonts: FontPair, classifier: DayClassifier, month: int,
+    c: Canvas, spec: CalendarSpec, fonts: FontSet, classifier: DayClassifier, month: int,
     x: float, y_top: float, col_w: float, band_h: float, month_names: dict[int, str], day_names: dict[int, str],
     name_size: float,
 ) -> None:
@@ -298,15 +331,16 @@ def _draw_month_column(
 
     # Month name
     c.setFillColor(spec.paint(spec.month_name_color))
-    _draw_centered(c, month_names[month], fonts.bold, name_size, x, y_top - header_h, col_w, header_h)
+    _draw_centered(c, month_names[month], fonts.month.bold, name_size, x, y_top - header_h, col_w, header_h)
 
+    num_font, dname_font = fonts.day_number.regular, fonts.day_name.regular
     base_size = min(row_h * 0.62, col_w * 0.17)
-    num_size = min(base_size * spec.day_number_scale / 100, row_h * 0.9)
-    name_size = base_size * 0.75
+    num_size = scaled(base_size, spec.day_number_scale, row_h * 0.9)
+    name_size = scaled(base_size * 0.75, spec.day_name_scale, row_h * 0.9)
     for label in day_names.values():
-        name_size = min(name_size, fit_font_size(label, fonts.regular, name_size, col_w * 0.34))
+        name_size = min(name_size, fit_font_size(label, dname_font, name_size, col_w * 0.34))
     week_size = base_size * 0.6
-    num_right = x + pad + pdfmetrics.stringWidth("00", fonts.regular, num_size)
+    num_right = x + pad + pdfmetrics.stringWidth("00", num_font, num_size)
     name_left = num_right + col_w * 0.08
     ndays = calendar.monthrange(spec.year, month)[1]
 
@@ -318,16 +352,16 @@ def _draw_month_column(
             c.setFillColor(spec.paint(bg))
             c.rect(x, cy, col_w, row_h, stroke=0, fill=1)
         c.setFillColor(spec.paint(classifier.day_number_color(d)))
-        c.setFont(fonts.regular, num_size)
-        c.drawRightString(num_right, baseline_for_vcenter(fonts.regular, num_size, cy, row_h), str(d.day))
+        c.setFont(num_font, num_size)
+        c.drawRightString(num_right, baseline_for_vcenter(num_font, num_size, cy, row_h), str(d.day))
         if spec.table_day_names:
             c.setFillColor(spec.paint(classifier.day_name_color(d)))
-            c.setFont(fonts.regular, name_size)
-            c.drawString(name_left, baseline_for_vcenter(fonts.regular, name_size, cy, row_h), day_names[d.weekday()])
+            c.setFont(dname_font, name_size)
+            c.drawString(name_left, baseline_for_vcenter(dname_font, name_size, cy, row_h), day_names[d.weekday()])
         if spec.show_week_numbers and (d.weekday() == spec.week_start or d.day == 1):
             c.setFillColor(spec.paint(spec.week_number_color))
-            c.setFont(fonts.regular, week_size)
-            c.drawRightString(x + col_w - pad, baseline_for_vcenter(fonts.regular, week_size, cy, row_h),
+            c.setFont(num_font, week_size)
+            c.drawRightString(x + col_w - pad, baseline_for_vcenter(num_font, week_size, cy, row_h),
                               str(d.isocalendar()[1]))
 
     # Per-day borders, after all fills so they stay visible
@@ -345,7 +379,9 @@ def _draw_columns_layout(c, spec, frame, fonts, classifier, month_names, day_nam
     per_band, bands = blocks_for(spec)
     col_w = (frame.content_w - (per_band - 1) * frame.gutter_x) / per_band
     band_h = (frame.grid_h - (bands - 1) * frame.gutter_y) / bands
-    name_size = shared_font_size(month_names.values(), fonts.bold, band_h * 0.06 * 0.55, col_w * 0.9)
+    header_h = band_h * 0.06
+    name_size = shared_font_size(month_names.values(), fonts.month.bold,
+                                 scaled(header_h * 0.55, spec.month_name_scale, header_h * 0.9), col_w * 0.9)
     for idx in range(12):
         band, col = idx // per_band, idx % per_band
         x = frame.margin + col * (col_w + frame.gutter_x)
@@ -367,12 +403,12 @@ class LegendPlan:
         return len(self.rows) * self.row_h
 
 
-def plan_legend(spec: CalendarSpec, frame: Frame, fonts: FontPair, classifier: DayClassifier) -> LegendPlan | None:
+def plan_legend(spec: CalendarSpec, frame: Frame, fonts: FontSet, classifier: DayClassifier) -> LegendPlan | None:
     entries = classifier.legend_entries() if spec.show_legend else []
     if not entries:
         return None
-    row_h = frame.content_h * 0.016
-    font_size = row_h * 0.6
+    font_size = scaled(frame.content_h * 0.016 * 0.6, spec.legend_scale, frame.content_h * 0.05)
+    row_h = max(frame.content_h * 0.016, font_size / 0.6)  # rows grow with the font
     swatch = row_h * 0.7
     gap_between = row_h * 1.2
     rows: list[list[tuple[str, DayStyle, float]]] = [[]]
@@ -381,7 +417,7 @@ def plan_legend(spec: CalendarSpec, frame: Frame, fonts: FontPair, classifier: D
         label = format_date(d, format="d MMM", locale=spec.locale)
         if style.note:
             label += f" – {style.note}"
-        width = swatch + row_h * 0.4 + pdfmetrics.stringWidth(label, fonts.regular, font_size)
+        width = swatch + row_h * 0.4 + pdfmetrics.stringWidth(label, fonts.legend.regular, font_size)
         if rows[-1] and used + gap_between + width > frame.content_w:
             rows.append([])
             used = 0.0
@@ -390,7 +426,7 @@ def plan_legend(spec: CalendarSpec, frame: Frame, fonts: FontPair, classifier: D
     return LegendPlan(rows, row_h, font_size, swatch)
 
 
-def _draw_legend(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontPair, plan: LegendPlan) -> None:
+def _draw_legend(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontSet, plan: LegendPlan) -> None:
     gap_between = plan.row_h * 1.2
     top = frame.margin + plan.height
     for r, row in enumerate(plan.rows):
@@ -407,8 +443,8 @@ def _draw_legend(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontPair, p
                 c.rect(x, sy, plan.swatch, plan.swatch, stroke=1, fill=0)
             # Labels always use the normal text colour: a day's own number colour is tuned for its cell background.
             c.setFillColor(spec.paint(spec.day_number_color))
-            c.setFont(fonts.regular, plan.font_size)
-            c.drawString(x + plan.swatch + plan.row_h * 0.4, baseline_for_vcenter(fonts.regular, plan.font_size, y, plan.row_h), label)
+            c.setFont(fonts.legend.regular, plan.font_size)
+            c.drawString(x + plan.swatch + plan.row_h * 0.4, baseline_for_vcenter(fonts.legend.regular, plan.font_size, y, plan.row_h), label)
             x += width + gap_between
 
 
@@ -432,7 +468,7 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
     if spec.title_align not in TITLE_ALIGNS or spec.year_align not in TITLE_ALIGNS:
         raise ValueError(f"unknown title alignment; choose one of {TITLE_ALIGNS}")
     frame = compute_frame(spec)
-    fonts = register_family(spec.font_family)
+    fonts = resolve_fonts(spec)
     classifier = DayClassifier(spec)
     month_names, day_names = calendar_names(spec)
     legend = plan_legend(spec, frame, fonts, classifier)
@@ -440,7 +476,7 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
         frame = replace(frame, legend_h=legend.height)
 
     # initialFontName: otherwise ReportLab references (non-embedded) Helvetica in the page preamble.
-    c = Canvas(out, pagesize=(frame.page_w, frame.page_h), initialFontName=fonts.regular, initialFontSize=12,
+    c = Canvas(out, pagesize=(frame.page_w, frame.page_h), initialFontName=fonts.base.regular, initialFontSize=12,
                enforceColorSpace=spec.color_mode)  # hard guarantee: a colour in the wrong model raises
     c.setTitle(f"{spec.display_title} wall calendar")
     c.setSubject(f"{spec.page_size} {spec.orientation} year calendar {spec.year}")
@@ -448,13 +484,13 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
     c.setAuthor("megacalendar")
 
     if spec.background_path is not None:
-        draw_background(c, spec.background_path, frame.page_w, frame.page_h, spec.background_mode, fonts.regular,
+        draw_background(c, spec.background_path, frame.page_w, frame.page_h, spec.background_mode, fonts.base.regular,
                         spec.color_mode, spec.background_opacity / 100)
 
     logo = logo_box(spec, frame)
     _draw_title(c, spec, frame, fonts, reserved_w=(logo[2] + frame.content_w * 0.03) if logo else 0.0)
     if logo is not None:
-        _draw_logo(c, spec, logo, fonts.regular)
+        _draw_logo(c, spec, logo, fonts.base.regular)
     draw = _draw_grid_layout if spec.layout == "grid" else _draw_columns_layout
     draw(c, spec, frame, fonts, classifier, month_names, day_names)
     if legend is not None:

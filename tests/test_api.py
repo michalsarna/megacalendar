@@ -306,7 +306,9 @@ def test_missing_columns_are_added_on_startup(tmp_path):
                    "title_align", "layout", "month_names_uppercase", "day_names_uppercase",
                    "day_number_scale", "table_day_names", "day_border_color", "day_border_width_mm",
                    "show_year", "year_align", "month_gap_mm", "show_legend", "holiday_day_number_color", "holiday_day_name_color",
-                   "year_color", "logo_asset_id", "logo_align", "logo_opacity"}
+                   "year_color", "logo_asset_id", "logo_align", "logo_opacity",
+                   "title_font", "title_scale", "year_font", "year_scale", "month_name_font", "month_name_scale",
+                   "day_name_font", "day_name_scale", "day_number_font", "legend_font", "legend_scale"}
     legacy_columns = [c["name"] for c in inspect(eng).get_columns("projects") if c["name"] not in new_columns]
     with eng.begin() as conn:  # rebuild the schema as it was before the border/colour-mode/library features
         conn.execute(text(f"CREATE TABLE projects_legacy AS SELECT {', '.join(legacy_columns)} FROM projects"))
@@ -571,3 +573,29 @@ def test_every_rendered_setting_round_trips_through_autosave(client):
         after = client.get(f"/api/projects/{p['id']}").json()
         after.pop("updated_at"); before.pop("updated_at")
         assert after == before, color_mode
+
+
+def test_font_fields_api_and_previews(client):
+    p = _create(client, title_font="Oswald", legend_font="Lora", month_name_scale=140)
+    pid = p["id"]
+    assert p["title_font"] == "Oswald" and p["year_font"] is None and p["month_name_scale"] == 140
+    assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_name_font": "Comic"}).status_code == 422
+    assert client.post("/api/projects", json={"name": "x", "year": 2027, "legend_scale": 10}).status_code == 422
+    assert_print_ready(client.get(f"/api/projects/{pid}/pdf").content, 594, 841, mode="RGB")
+
+    page = client.get(f"/projects/{pid}").text
+    assert '@font-face { font-family: "mc-Oswald"; src: url("/fonts/Oswald.ttf")' in page
+    assert page.count('class="font-select"') == 7  # project font + six elements
+    assert 'class="font-preview" style="font-family:\'mc-Oswald\';font-weight:700"' in page  # title preview in its font, bold
+    assert '<option value="" style="font-family:\'mc-DejaVuSans\'" selected>Default (DejaVuSans)</option>' in page
+    r = client.get("/fonts/Oswald-Bold.ttf")
+    assert r.status_code == 200 and r.content[:4] == b"\x00\x01\x00\x00"
+
+    # form: blank = default font, values round-trip
+    form = {"name": "F", "year": "2027", "form_color_mode": "RGB", "color_mode": "RGB", "title_font": "", "year_font": "Lato",
+            "day_number_font": "Roboto", "day_name_scale": "70", "legend_scale": "120"}
+    r = client.post(f"/projects/{pid}", data=form, headers={"Accept": "application/json"})
+    assert r.status_code == 200, r.text
+    got = client.get(f"/api/projects/{pid}").json()
+    assert got["title_font"] is None and got["year_font"] == "Lato" and got["day_number_font"] == "Roboto"
+    assert got["day_name_scale"] == 70 and got["legend_scale"] == 120 and got["title_scale"] == 100

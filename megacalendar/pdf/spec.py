@@ -150,6 +150,18 @@ class CalendarSpec:
     month_names_uppercase: bool = False
     day_names_uppercase: bool = False
     day_number_scale: float = 100.0  # percent of the automatic day-number size
+    # Per-element typography. Font None = the project font_family; scales are percent of the automatic size.
+    title_font: str | None = None
+    title_scale: float = 100.0
+    year_font: str | None = None
+    year_scale: float = 100.0
+    month_name_font: str | None = None
+    month_name_scale: float = 100.0
+    day_name_font: str | None = None
+    day_name_scale: float = 100.0
+    day_number_font: str | None = None
+    legend_font: str | None = None
+    legend_scale: float = 100.0
     table_day_names: bool = True  # table layout: show the day name next to each number
     month_gap_mm: float | None = None  # space between month blocks; None = automatic
     show_legend: bool = False  # list private holidays at the bottom of the sheet
