@@ -20,6 +20,13 @@ CMYK project downloads as a true CMYK TIFF, pixel-for-pixel the same ink values 
   (`/register`, one year and two one-month calendars; an email address or phone number can only belong to one
   account). Each profile has a default calendar language used for new calendars.
   The landing page is public; everything else needs a login (session cookie, or HTTP Basic for the API).
+- Self-registered accounts must confirm their email address before they can log in: a 7-character code
+  (uppercase letters and digits, expires in 30 minutes) is emailed on registration, entered at
+  `/confirm-email` (resend available). The master configures the SMTP server at `/settings/mail`
+  (host, port, username/password, STARTTLS, from address/name, with a "send test email" button);
+  self-registration is refused until it's set up. Users who forget their password use `/forgot-password`
+  → emailed code → `/reset-password`, the same 7-character code mechanism, without revealing whether an
+  account exists. Accounts created by the master are trusted and skip confirmation.
 
 - Sheet sizes A0 to A5, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
 - Adjustable space between months (validated against the sheet so blocks never overlap; table-style
@@ -201,8 +208,12 @@ Source Sans 3, Noto Sans, Liberation Sans/Serif, GNU FreeSans/FreeSerif, Oswald,
 ```
 POST   /api/auth/login  {"username","password"}     POST /api/auth/logout      (or send HTTP Basic)
 POST   /api/auth/register {"username","password","first_name","last_name","phone","email","locale"}
+                                                          (not logged in yet: confirm the emailed code first)
+POST   /api/auth/confirm-email {"code"}              POST /api/auth/resend-confirmation
+POST   /api/auth/forgot-password {"identifier"}       POST /api/auth/reset-password {"identifier","code","new_password"}
 GET    /api/me    PUT /api/me    POST /api/me/password    GET|POST /api/me/addresses  PUT|DELETE /api/me/addresses/{id}
 GET    /api/users  POST /api/users  GET|PUT|DELETE /api/users/{id}                      (master only)
+GET|PUT /api/settings/mail   POST /api/settings/mail/test?to_email=…                    (master only)
 GET    /api/meta
 GET    /api/projects                 POST /api/projects   {"kind": "year"|"month", "month": 1-12, ...}
                                                           (403 when the kind's limit is reached)
@@ -233,7 +244,8 @@ appears in the content stream, embedded font programs, and matching image colour
 megacalendar/
   pdf/        rendering engine (no DB knowledge): spec, pagesizes, fonts, days, background, render, raster (PNG/TIFF)
   auth.py     passwords (PBKDF2), session/Basic authentication, master helpers
-  models.py   SQLAlchemy tables (User, DeliveryAddress, Project, DayOverride, BackgroundAsset)
+  mail.py     SMTP sending for confirmation/reset/test emails (no DB knowledge)
+  models.py   SQLAlchemy tables (User, DeliveryAddress, Project, DayOverride, BackgroundAsset, MailSettings)
   schemas.py  Pydantic validation shared by API and forms
   service.py  application logic (CRUD, uploads, spec building, PDF generation)
   api.py      JSON API        web.py  HTML UI        main.py  ASGI app

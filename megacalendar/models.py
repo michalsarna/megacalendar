@@ -29,6 +29,14 @@ class User(Base):
     phone: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(200))
     locale: Mapped[str] = mapped_column(String(20), default="en", nullable=False, server_default="en")  # default calendar language
+    theme: Mapped[str] = mapped_column(String(10), default="system", nullable=False, server_default="system")  # "system" | "light" | "dark"
+
+    # Self-registered accounts must confirm their email before they can log in; accounts created by
+    # the master (or pre-existing rows, via the server_default) are trusted and start out verified.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
+    verification_code: Mapped[str | None] = mapped_column(String(10))
+    verification_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verification_purpose: Mapped[str | None] = mapped_column(String(10))  # "register" | "reset"
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
@@ -180,3 +188,18 @@ class DayOverride(Base):
     note: Mapped[str | None] = mapped_column(String(200))
 
     project: Mapped[Project] = relationship(back_populates="day_overrides")
+
+
+class MailSettings(Base):
+    """Singleton row (id=1): the SMTP server the master configures for confirmation/reset emails."""
+
+    __tablename__ = "mail_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    host: Mapped[str | None] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer, default=587, nullable=False, server_default="587")
+    username: Mapped[str | None] = mapped_column(String(255))
+    password: Mapped[str | None] = mapped_column(String(255))
+    use_tls: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
+    from_email: Mapped[str | None] = mapped_column(String(200))
+    from_name: Mapped[str | None] = mapped_column(String(200))

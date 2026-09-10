@@ -142,18 +142,35 @@ def test_month_calendar_pages(make_user):
 
 # ---------------------------------------------------------------- registration, defaults, title toggle, alignment
 
-def test_registration_with_unique_contact(anon, client):
-    from tests.conftest import csrf_of
+def test_registration_requires_mail_server(anon, client):
+    # explicit reset: mail settings are a shared singleton, so an earlier test may have configured them
+    assert client.put("/api/settings/mail", json={}).status_code == 200
+    contact = {"first_name": "Rita", "last_name": "Reg", "phone": "+48 700 100 200", "email": "Rita@Example.com"}
+    r = anon.post("/api/auth/register", json={"username": "rita", "password": "ritapw123", **contact})
+    assert r.status_code == 422 and "mail server" in r.text
 
+
+def test_registration_with_unique_contact(anon, client, mailbox):
+    from tests.conftest import code_from, configure_mail, csrf_of
+
+    configure_mail(client)
     page = anon.get("/").text
     assert 'href="/register"' in page and "Log in</a>" not in page.split("<main>")[1].split("</main>")[0]  # no login button in the body
     assert 'href="/register"' in anon.get("/login").text
     contact = {"first_name": "Rita", "last_name": "Reg", "phone": "+48 700 100 200", "email": "Rita@Example.com"}
     r = anon.post("/api/auth/register", json={"username": "rita", "password": "ritapw123", "locale": "pl", **contact})
     assert r.status_code == 201, r.text
+    assert r.json() == {"pending_confirmation": True, "email": "Rita@Example.com"}
+    assert anon.get("/api/me").status_code == 401  # not logged in until confirmed
+    to_email, subject, body = mailbox[-1]
+    assert to_email == "Rita@Example.com" and "confirm" in subject.lower()
+    code = code_from(body)
+    assert anon.post("/api/auth/confirm-email", json={"code": "WRONGCD"}).status_code == 422
+    r = anon.post("/api/auth/confirm-email", json={"code": code.lower()})  # case-insensitive
+    assert r.status_code == 200, r.text
     me = r.json()
     assert (me["project_limit"], me["small_project_limit"], me["locale"]) == (1, 2, "pl")
-    assert anon.get("/api/me").status_code == 200  # logged in right away
+    assert anon.get("/api/me").status_code == 200  # now logged in
     # allowances cannot be chosen by the registrant
     r2 = client.post("/api/users", json={"username": "x", "password": "x"})  # sanity: master API still validates
     assert r2.status_code == 422
@@ -177,6 +194,11 @@ def test_registration_with_unique_contact(anon, client):
         r = other.post("/register", data={"username": "sam", "password": "sampw1234", "confirm_password": "sampw1234", "first_name": "S",
                                           "last_name": "S", "phone": "+48 700 100 201", "email": "sam@x.io", "locale": "fi",
                                           "csrf_token": token}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/confirm-email"
+        page = other.get("/confirm-email").text
+        assert "sam@x.io" in page
+        sam_code = code_from(mailbox[-1][2])
+        r = other.post("/confirm-email", data={"code": sam_code, "csrf_token": token}, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/projects"
         assert other.get("/api/me").json()["locale"] == "fi"
     # the registrant's own year calendar uses their language by default
