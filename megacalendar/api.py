@@ -18,7 +18,7 @@ from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
 from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, ConfirmEmailIn, DayOverrideIn,
                       DayOverrideRead, ForgotPasswordIn, LoginIn, MailSettingsRead, MailSettingsUpdate, MeRead, Meta,
                       PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, RegisterIn, ResetPasswordIn,
-                      UserCreate, UserRead, UserUpdate)
+                      ThemeUpdate, UserCreate, UserRead, UserUpdate)
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(verify_csrf)])
 CurrentUser = Depends(auth.current_user_api)
@@ -139,6 +139,13 @@ def me(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)
 @router.put("/me", response_model=UserRead)
 def update_me(data: ProfileUpdate, user: User = CurrentUser, db: Session = Depends(get_db)):
     return _user_read(db, service.update_profile(db, user, data))
+
+
+@router.post("/me/theme", status_code=204)
+def update_theme(data: ThemeUpdate, user: User = CurrentUser, db: Session = Depends(get_db)):
+    """Separate from PUT /me so the header toggle never has to resend the rest of the profile."""
+    service.update_theme(db, user, data.theme)
+    return Response(status_code=204)
 
 
 @router.post("/me/password", status_code=204)

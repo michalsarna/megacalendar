@@ -12,6 +12,12 @@
       <label>Email <input name="email" type="email" maxlength="200" value="{{ user.email or '' }}"></label>
       <label>Default calendar language
         <select name="locale">{% for code, name in languages %}<option value="{{ code }}" {% if code == user.locale %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      <label>Colour theme
+        <select name="theme">
+          <option value="system" {% if user.theme == "system" %}selected{% endif %}>Follow system</option>
+          <option value="light" {% if user.theme == "light" %}selected{% endif %}>Light</option>
+          <option value="dark" {% if user.theme == "dark" %}selected{% endif %}>Dark</option>
+        </select></label>
       <button class="primary" type="submit">Save profile</button>
     </div>
     <p class="hint">Year calendars: {{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }} allowed{% else %} (no limit){% endif %}.

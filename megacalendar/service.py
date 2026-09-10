@@ -567,6 +567,11 @@ def update_profile(db: Session, user: User, data: ProfileUpdate) -> User:
     return user
 
 
+def update_theme(db: Session, user: User, theme: str) -> None:
+    user.theme = theme
+    db.commit()
+
+
 def change_password(db: Session, user: User, data: PasswordChange) -> None:
     if not verify_password(data.current_password, user.password_hash):
         raise ValueError("current password is wrong")
