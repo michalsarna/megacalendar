@@ -28,6 +28,7 @@ class User(Base):
     last_name: Mapped[str | None] = mapped_column(String(100))
     phone: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(200))
+    locale: Mapped[str] = mapped_column(String(20), default="en", nullable=False, server_default="en")  # default calendar language
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
@@ -79,6 +80,7 @@ class Project(Base):
     font_family: Mapped[str] = mapped_column(String(100), default="DejaVuSans", nullable=False)
     show_week_numbers: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     title_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
+    show_title: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
     show_year: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     year_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
     year_color: Mapped[dict | None] = mapped_column(JSON)  # None = same as title
@@ -86,6 +88,7 @@ class Project(Base):
     month_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_number_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    day_number_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
     # Per-element typography; font None = font_family
     title_font: Mapped[str | None] = mapped_column(String(100))
     title_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
@@ -96,6 +99,7 @@ class Project(Base):
     day_name_font: Mapped[str | None] = mapped_column(String(100))
     day_name_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     day_number_font: Mapped[str | None] = mapped_column(String(100))
+    week_number_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     legend_font: Mapped[str | None] = mapped_column(String(100))
     legend_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     table_day_names: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())

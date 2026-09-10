@@ -112,7 +112,13 @@
 
   <fieldset id="header">
     <legend>Header (title, year, logo)</legend>
+    {% if is_month %}
     <div class="row">
+      <label class="inline"><input type="checkbox" name="show_title" {% if project.show_title %}checked{% endif %}> Show the header (title, year, logo)</label>
+      <span class="hint">Without the header the month grid uses the whole sheet.</span>
+    </div>
+    {% else %}<input type="hidden" name="show_title" value="on">{% endif %}
+    <div class="row{% if not project.show_title %} dimmed{% endif %}" id="header-fields"{% if not project.show_title %} inert{% endif %} style="margin-top:.8rem">
       <label>Title <input name="title" value="{{ project.title or '' }}" placeholder="{{ project.year }}"></label>
       <label>Title alignment
         <select name="title_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.title_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
@@ -132,7 +138,7 @@
       <label>Year size (%) {{ scale("year_scale", project.year_scale) }}</label>
       <span class="hint">Same alignment as the title puts the year underneath it.</span>
     </div>
-    <div class="row" style="margin-top:.8rem">
+    <div class="row{% if not project.show_title %} dimmed{% endif %}" id="logo-fields"{% if not project.show_title %} inert{% endif %} style="margin-top:.8rem">
       <label>Logo
         <select name="logo_asset_id">
           <option value="">— none —</option>
@@ -167,8 +173,13 @@
     <div class="row">
       <div class="field"><span>Day numbers colour</span>{{ color("day_number_color", project.day_number_color) }}</div>
       <label>Day numbers font {{ font_select("day_number_font", project.day_number_font, "1 2 3 14 31") }}</label>
-      <label>Day number size (%) {{ scale("day_number_scale", project.day_number_scale) }}</label>
+      <label>Day number size (%) <input name="day_number_scale" type="number" min="10" max="300" step="5" value="{{ project.day_number_scale|int }}" title="% of the automatic size"></label>
+      {% if is_month %}
+      <label>Day number position
+        <select name="day_number_align">{% for a in ["left", "center", "right"] %}<option value="{{ a }}" {% if a == project.day_number_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      {% else %}<input type="hidden" name="day_number_align" value="{{ project.day_number_align }}">{% endif %}
       <div class="field"><span>Week numbers colour</span>{{ color("week_number_color", project.week_number_color) }}</div>
+      <label>Week number size (%) {{ scale("week_number_scale", project.week_number_scale) }}</label>
     </div>
     <div class="row" style="margin-top:.8rem">
       <span class="table-only{% if not is_table %} dimmed{% endif %}" {% if not is_table %}inert{% endif %}>
@@ -351,7 +362,9 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
     document.querySelectorAll('.table-only').forEach(el => setOff(el, !isTable));
     document.querySelectorAll('[data-dayname="all"]').forEach(el => setOff(el, dayNamesOff));
     document.querySelectorAll('[data-dayname="perday"]').forEach(el => setOff(el, dayNamesOff || !isTable));  // per-day names exist only in table style
-    setOff(document.getElementById('year-options'), !title.value.trim());
+    const headerOn = showTitle.type !== 'checkbox' || showTitle.checked;
+    document.querySelectorAll('#header-fields, #year-options, #logo-fields').forEach(el => setOff(el, !headerOn));
+    if (headerOn) setOff(document.getElementById('year-options'), !title.value.trim());
     // Logo may only take a free position in the title band.
     const taken = new Set([titleAlign.value]);
     if (title.value.trim() && showYear.checked) taken.add(yearAlign.value);
@@ -363,7 +376,8 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
   };
   const titleAlign = document.querySelector('[name=title_align]'), yearAlign = document.querySelector('[name=year_align]');
   const showYear = document.querySelector('[name=show_year]'), logoAlign = document.getElementById('logo-align');
-  [layout, tableDayNames, titleAlign, yearAlign, showYear].forEach(el => el.addEventListener('change', sync));
+  const showTitle = document.querySelector('[name=show_title]');
+  [layout, tableDayNames, titleAlign, yearAlign, showYear, showTitle].forEach(el => el.addEventListener('change', sync));
   title.addEventListener('input', sync);
   sync();
 })();
@@ -450,7 +464,8 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
     other.addEventListener('submit', async e => {
       if (!dirty && !timer && !inflight) return;
       e.preventDefault();
-      if (await save()) other.submit();
+      await save();
+      other.requestSubmit ? other.requestSubmit() : other.submit();
     });
   });
   window.addEventListener('beforeunload', e => { if (dirty || timer) { e.preventDefault(); e.returnValue = ''; } });

@@ -92,8 +92,8 @@ def test_small_projects_have_their_own_limit_and_fixed_month(make_user):
     # private holidays outside the month are rejected by the year check as before; inside are fine and render
     assert gina.put(f"/api/projects/{p['id']}/days/2027-03-15", json={"color": "#00ff00", "note": "Kick-off"}).status_code == 200
     r = gina.get(f"/api/projects/{p['id']}/pdf")
-    assert r.status_code == 200 and "march-2027-03-A1.pdf" in r.headers["content-disposition"]
-    assert_print_ready(r.content, 594, 841, mode="RGB")
+    assert r.status_code == 200 and "march-2027-03-A4.pdf" in r.headers["content-disposition"]
+    assert_print_ready(r.content, 210, 297, mode="RGB")
     # a year calendar keeps its year too
     yp = next(x for x in gina.get("/api/projects").json() if x["kind"] == "year")
     yp["year"] = 2031
@@ -127,7 +127,7 @@ def test_month_calendar_pages(make_user):
     page = ivy.get(url).text
     assert "September 2027" in page and 'class="fixed"' in page and 'name="year" value="2027"' in page
     assert 'type="number" min="1900"' not in page  # no editable year field
-    assert '<option value="9" selected>September</option>' in page and '<option value="3"' not in page  # picker fixed to the month
+    assert '<option value="9" selected>September</option>' in page and '>March</option>' not in page  # picker fixed to the month
     assert "Day border colour (untick = no border)" in page and "Table style)" not in page.split("Day border colour")[1][:80]
     assert 'name="layout"' in page and 'inert>Layout (one-month calendar)' in page
     assert "1 of 2" in ivy.get("/projects").text
@@ -138,3 +138,102 @@ def test_month_calendar_pages(make_user):
     pid = int(url.rsplit("/", 1)[1])
     assert ivy.get(f"/api/projects/{pid}").json()["day_overrides"][0]["day"] == "2027-09-20"
     assert ivy.get(f"{url}/pdf").status_code == 200
+
+
+# ---------------------------------------------------------------- registration, defaults, title toggle, alignment
+
+def test_registration_with_unique_contact(anon, client):
+    from tests.conftest import csrf_of
+
+    page = anon.get("/").text
+    assert 'href="/register"' in page and "Log in</a>" not in page.split("<main>")[1].split("</main>")[0]  # no login button in the body
+    assert 'href="/register"' in anon.get("/login").text
+    contact = {"first_name": "Rita", "last_name": "Reg", "phone": "+48 700 100 200", "email": "Rita@Example.com"}
+    r = anon.post("/api/auth/register", json={"username": "rita", "password": "ritapw123", "locale": "pl", **contact})
+    assert r.status_code == 201, r.text
+    me = r.json()
+    assert (me["project_limit"], me["small_project_limit"], me["locale"]) == (1, 2, "pl")
+    assert anon.get("/api/me").status_code == 200  # logged in right away
+    # allowances cannot be chosen by the registrant
+    r2 = client.post("/api/users", json={"username": "x", "password": "x"})  # sanity: master API still validates
+    assert r2.status_code == 422
+    # duplicate email (case-insensitive) or phone (formatting-insensitive) is refused
+    from fastapi.testclient import TestClient
+
+    from megacalendar.main import app
+
+    with TestClient(app) as other:
+        dup_mail = {**contact, "phone": "+48 999 999 999", "email": "rita@example.com"}
+        r = other.post("/api/auth/register", json={"username": "rita2", "password": "ritapw123", **dup_mail})
+        assert r.status_code == 422 and "email already exists" in r.text
+        dup_phone = {**contact, "email": "new@example.com", "phone": "+48700-100-200"}
+        r = other.post("/api/auth/register", json={"username": "rita3", "password": "ritapw123", **dup_phone})
+        assert r.status_code == 422 and "phone already exists" in r.text
+        # HTML form path
+        token = csrf_of(other)
+        r = other.post("/register", data={"username": "sam", "password": "sampw1234", "confirm_password": "nope", "first_name": "S",
+                                          "last_name": "S", "phone": "+48 1", "email": "s@x.io", "locale": "en", "csrf_token": token})
+        assert r.status_code == 422 and "do not match" in r.text
+        r = other.post("/register", data={"username": "sam", "password": "sampw1234", "confirm_password": "sampw1234", "first_name": "S",
+                                          "last_name": "S", "phone": "+48 700 100 201", "email": "sam@x.io", "locale": "fi",
+                                          "csrf_token": token}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/projects"
+        assert other.get("/api/me").json()["locale"] == "fi"
+    # the registrant's own year calendar uses their language by default
+    anon.headers["X-CSRF-Token"] = me["csrf_token"]
+    p = anon.post("/api/projects", json={"name": "Mine", "year": 2027}).json()
+    assert p["locale"] == "pl"
+    p2 = anon.post("/api/projects", json={"name": "Other", "year": 2027, "kind": "month", "month": 1, "locale": "de"}).json()
+    assert p2["locale"] == "de"
+
+
+def test_month_calendar_defaults_and_title_toggle(make_user):
+    jo = make_user("jo", "jopw12345")
+    p = jo.post("/api/projects", json={"name": "Jan", "year": 2027, "kind": "month", "month": 1}).json()
+    assert (p["page_size"], p["day_number_scale"], p["day_number_align"], p["show_title"]) == ("A4", 50, "left", True)
+    y = jo.post("/api/projects", json={"name": "Y", "year": 2027}).json()
+    assert (y["page_size"], y["day_number_scale"], y["day_number_align"]) == ("A1", 100, "center")
+    # explicit values win over the month defaults
+    jo2 = make_user("jo2", "jopw12345", small_project_limit=3)
+    p2 = jo2.post("/api/projects", json={"name": "Feb", "year": 2027, "kind": "month", "month": 2, "page_size": "A3",
+                                         "day_number_align": "right"}).json()
+    assert (p2["page_size"], p2["day_number_align"]) == ("A3", "right")
+    assert jo.post("/api/projects", json={"name": "x", "year": 2027, "kind": "month", "month": 3, "day_number_align": "top"}).status_code == 422
+    # header off: the sheet has no title band
+    p["show_title"] = False
+    assert jo.put(f"/api/projects/{p['id']}", json=p).json()["show_title"] is False
+    assert_print_ready(jo.get(f"/api/projects/{p['id']}/pdf").content, 210, 297, mode="RGB")
+    page = jo.get(f"/projects/{p['id']}").text
+    assert 'name="show_title"' in page and 'id="header-fields"' in page and 'name="day_number_align"' in page
+    assert 'id="header-fields" inert' in page  # header fields inert while the header is off
+    # the new-project form for a month calendar preselects A4
+    page = jo.get("/projects/new?kind=month").text
+    assert '<option value="A4" selected>' in page
+    # one-month list has no holidays column
+    page = jo.get("/projects").text
+    small_table = page.split("My one-month calendars")[1]
+    assert "<th>Holidays</th>" not in small_table.split("</table>")[0] and "<th>Holidays</th>" in page
+
+
+def test_day_alignment_and_hidden_header_render():
+    from megacalendar.pdf.render import compute_frame
+
+    def day_positions(spec):
+        content = _content(spec)
+        return {int(m.group(3)): (float(m.group(1)), float(m.group(2))) for m in
+                re.finditer(rb"BT 1 0 0 1 ([\d.]+) ([\d.]+) Tm /F\d\+0 [\d.]+ Tf [^\n]*\((\d+)\) Tj", content)}
+
+    base = dict(year=2027, month=3, page_size="A4", day_number_scale=20)
+    left = day_positions(CalendarSpec(day_number_align="left", **base))
+    center = day_positions(CalendarSpec(day_number_align="center", **base))
+    right = day_positions(CalendarSpec(day_number_align="right", **base))
+    assert left[1][0] < center[1][0] < right[1][0]  # same cell, x grows with the alignment
+    assert left[1][1] > center[1][1]  # corner numbers sit near the top of the cell
+
+    with_header = compute_frame(CalendarSpec(**base))
+    without = compute_frame(CalendarSpec(show_title=False, **base))
+    assert without.title_h == 0 and without.grid_h > with_header.grid_h
+    content = _content(CalendarSpec(show_title=False, title="Team", show_year=True, **base))
+    assert b"(Team)" not in content and b"(2027)" not in content
+    with pytest.raises(ValueError, match="day number alignment"):
+        _render(CalendarSpec(day_number_align="top", **base))

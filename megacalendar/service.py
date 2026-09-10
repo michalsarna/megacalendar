@@ -16,7 +16,8 @@ from .auth import hash_password, verify_password
 from .models import BackgroundAsset, DayOverride, DeliveryAddress, Project, User
 from .pdf import CalendarSpec, DayStyle, color_from_dict, render_calendar, to_mode
 from .pdf.render import max_month_gap_mm
-from .schemas import AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate, UserCreate, UserUpdate
+from .schemas import (AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate, RegisterIn,
+                      UserCreate, UserUpdate)
 
 
 class LimitReached(ValueError):
@@ -71,6 +72,8 @@ def create_project(db: Session, data: ProjectCreate, owner: User) -> Project:
         raise LimitReached(f"{label} limit reached ({limit_for(owner, data.kind)}); ask the master user for more")
     project = Project(owner_id=owner.id, kind=data.kind, month=data.month)
     _apply(db, project, data, owner)
+    if "locale" not in data.model_fields_set:
+        project.locale = owner.locale or "en"  # the user's default calendar language
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -266,6 +269,7 @@ def spec_from_project(project: Project) -> CalendarSpec:
         font_family=project.font_family,
         title=project.title,
         title_align=project.title_align,
+        show_title=project.show_title,
         show_year=project.show_year,
         year_align=project.year_align,
         year_color=color_from_dict(project.year_color),
@@ -279,6 +283,7 @@ def spec_from_project(project: Project) -> CalendarSpec:
         month_name_font=project.month_name_font, month_name_scale=project.month_name_scale,
         day_name_font=project.day_name_font, day_name_scale=project.day_name_scale,
         day_number_font=project.day_number_font,
+        week_number_scale=project.week_number_scale if project.week_number_scale is not None else 100.0,
         legend_font=project.legend_font, legend_scale=project.legend_scale,
         table_day_names=project.table_day_names,
         month_gap_mm=project.month_gap_mm,
@@ -338,13 +343,38 @@ def project_counts(db: Session, kind: str = "year") -> dict[int, int]:
     return {owner_id: count for owner_id, count in rows}
 
 
+def normalize_phone(phone: str | None) -> str:
+    return "".join(ch for ch in (phone or "") if ch.isdigit() or ch == "+")
+
+
+def contact_in_use(db: Session, email: str | None, phone: str | None) -> str | None:
+    """Name of the contact field ('email' / 'phone') already used by another account, or None."""
+    if email:
+        if db.scalar(select(User).where(func.lower(User.email) == email.strip().lower())) is not None:
+            return "email"
+    if phone:
+        wanted = normalize_phone(phone)
+        for existing in db.scalars(select(User.phone).where(User.phone.is_not(None))):
+            if wanted and normalize_phone(existing) == wanted:
+                return "phone"
+    return None
+
+
+def register_user(db: Session, data: RegisterIn) -> User:
+    """Self-service registration: refused when the email or phone number is already known."""
+    field = contact_in_use(db, data.email, data.phone)
+    if field:
+        raise ValueError(f"an account with this {field} already exists")
+    return create_user(db, UserCreate(**data.model_dump()))
+
+
 def create_user(db: Session, data: UserCreate) -> User:
     if get_user_by_name(db, data.username) is not None:
         raise ValueError(f"username {data.username!r} is already taken")
     user = User(username=data.username, password_hash=hash_password(data.password), is_master=False,
                 project_limit=data.project_limit, small_project_limit=data.small_project_limit,
                 first_name=data.first_name, last_name=data.last_name,
-                phone=data.phone, email=data.email)
+                phone=data.phone, email=data.email, locale=data.locale)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -356,7 +386,7 @@ def update_user(db: Session, user: User, data: UserUpdate) -> User:
         data.is_active = True  # the master account can never be locked out
         data.project_limit = None
         data.small_project_limit = None
-    for key in ("first_name", "last_name", "phone", "email", "project_limit", "small_project_limit", "is_active"):
+    for key in ("first_name", "last_name", "phone", "email", "project_limit", "small_project_limit", "is_active", "locale"):
         setattr(user, key, getattr(data, key))
     if data.password:
         user.password_hash = hash_password(data.password)

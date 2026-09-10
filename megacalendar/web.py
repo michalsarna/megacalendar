@@ -21,14 +21,14 @@ from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
 from .schemas import (BACKGROUND_MODES, AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate,
-                      UserCreate, UserUpdate, country_choices, language_choices)
+                      RegisterIn, UserCreate, UserUpdate, country_choices, language_choices)
 
 router = APIRouter(include_in_schema=False, dependencies=[Depends(verify_csrf)])
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 LAYOUT_LABELS = {"grid": "Month grids", "columns": "Table style"}
 FONT_FIELDS = ("title_font", "year_font", "month_name_font", "day_name_font", "day_number_font", "legend_font")
-SCALE_FIELDS = ("title_scale", "year_scale", "month_name_scale", "day_name_scale", "legend_scale")
+SCALE_FIELDS = ("title_scale", "year_scale", "month_name_scale", "day_name_scale", "week_number_scale", "legend_scale")
 COLOR_FIELDS = ("title_color", "month_name_color", "day_name_color", "day_number_color", "week_number_color",
                 "weekday_color", "weekend_color", "holiday_color", "month_border_color", "day_border_color",
                 "holiday_day_number_color", "holiday_day_name_color", "year_color")
@@ -80,7 +80,9 @@ def _parse_project_form(form: FormData) -> dict:
         **{key: form.get(key) or None for key in FONT_FIELDS},
         **{key: form.get(key) for key in SCALE_FIELDS},
         "show_week_numbers": form.get("show_week_numbers") is not None,
+        "show_title": form.get("show_title") is not None,
         "show_year": form.get("show_year") is not None,
+        "day_number_align": form.get("day_number_align"),
         "year_align": form.get("year_align"),
         "show_legend": form.get("show_legend") is not None,
         "month_gap_mm": form.get("month_gap_mm") or None,
@@ -102,7 +104,8 @@ def _parse_project_form(form: FormData) -> dict:
     # Absent scalar fields fall back to schema defaults instead of failing validation.
     for key in ("year", "page_size", "orientation", "margin_mm", "locale", "week_start", "font_family",
                 "background_mode", "month_border_width_mm", "color_mode", "background_opacity", "title_align", "layout",
-                "day_number_scale", "day_border_width_mm", "year_align", "logo_align", "logo_opacity", *SCALE_FIELDS):
+                "day_number_scale", "day_border_width_mm", "year_align", "logo_align", "logo_opacity", "day_number_align",
+                *SCALE_FIELDS):
         if data[key] is None:
             del data[key]
     return data
@@ -217,6 +220,31 @@ def logout_submit(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
+@router.get("/register", response_class=HTMLResponse)
+def register_page(request: Request, db: Session = Depends(get_db)):
+    if auth.user_from_request(request, db) is not None:
+        return RedirectResponse("/projects", status_code=303)
+    return templates.TemplateResponse(request, "register.html", _ctx(request, on_login_page=True))
+
+
+@router.post("/register")
+async def register_submit(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    values = {k: str(form.get(k, "")) for k in ("username", "first_name", "last_name", "phone", "email", "locale")}
+    try:
+        if form.get("password") != form.get("confirm_password"):
+            raise ValueError("the passwords do not match")
+        data = RegisterIn(password=str(form.get("password", "")), **{k: v or None for k, v in values.items() if k != "locale"},
+                          locale=values["locale"] or "en")
+        user = service.register_user(db, data)
+    except (ValidationError, ValueError) as exc:
+        errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
+        return templates.TemplateResponse(request, "register.html", _ctx(request, on_login_page=True, errors=errors, values=values),
+                                          status_code=422)
+    auth.login(request, user)
+    return RedirectResponse("/projects", status_code=303)
+
+
 # ---------------------------------------------------------------- projects
 
 def _projects_ctx(request: Request, db: Session, user: User, **extra):
@@ -225,11 +253,7 @@ def _projects_ctx(request: Request, db: Session, user: User, **extra):
                 small_projects=[p for p in projects if p.kind == "month"], next_year=date.today().year + 1,
                 project_count=service.project_count(db, user, "year"), can_create=service.can_create_project(db, user, "year"),
                 small_count=service.project_count(db, user, "month"), can_create_small=service.can_create_project(db, user, "month"),
-                month_names=_month_names(user_locale(user)), **extra)
-
-
-def user_locale(user: User) -> str:
-    return "en"
+                month_names=_month_names(user.locale), **extra)
 
 
 @router.get("/projects", response_class=HTMLResponse)
@@ -248,7 +272,7 @@ def new_project(request: Request, user: User = CurrentUser, db: Session = Depend
         label = "One-month calendar" if kind == "month" else "Year calendar"
         return _index_with_errors(request, db, user, [f"{label} limit reached ({service.limit_for(user, kind)}). Ask the master user for more."])
     return templates.TemplateResponse(request, "new_project.html", _ctx(request, user=user, next_year=date.today().year + 1,
-                                                                          kind=kind, month_names=_month_names("en"),
+                                                                          kind=kind, month_names=_month_names(user.locale),
                                                                           this_month=date.today().month))
 
 
@@ -258,7 +282,7 @@ async def create(request: Request, user: User = CurrentUser, db: Session = Depen
     try:
         kind = "month" if form.get("kind") == "month" else "year"
         data = ProjectCreate(name=form.get("name", ""), year=form.get("year"), color_mode=form.get("color_mode") or "RGB",
-                             layout=form.get("layout") or "grid", page_size=form.get("page_size") or "A1",
+                             layout=form.get("layout") or "grid", page_size=form.get("page_size") or None,
                              orientation=form.get("orientation") or "portrait", kind=kind,
                              month=form.get("month") or None)
         project = service.create_project(db, data, user)
@@ -266,7 +290,7 @@ async def create(request: Request, user: User = CurrentUser, db: Session = Depen
         return templates.TemplateResponse(
             request, "new_project.html",
             _ctx(request, user=user, next_year=date.today().year + 1, errors=_errors(exc), values=dict(form),
-                 kind="month" if form.get("kind") == "month" else "year", month_names=_month_names("en"),
+                 kind="month" if form.get("kind") == "month" else "year", month_names=_month_names(user.locale),
                  this_month=date.today().month), status_code=422,
         )
     except service.LimitReached as exc:
@@ -432,7 +456,8 @@ def profile(request: Request, user: User = CurrentUser, db: Session = Depends(ge
 async def profile_save(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
     form = await request.form()
     try:
-        service.update_profile(db, user, ProfileUpdate(**{k: form.get(k) for k in ("first_name", "last_name", "phone", "email")}))
+        service.update_profile(db, user, ProfileUpdate(**{k: form.get(k) for k in ("first_name", "last_name", "phone", "email")},
+                                                        locale=form.get("locale") or "en"))
     except ValidationError as exc:
         return templates.TemplateResponse(request, "profile.html", _profile_ctx(request, db, user, errors=_errors(exc)), status_code=422)
     return RedirectResponse("/profile?saved=profile", status_code=303)
@@ -535,7 +560,7 @@ async def user_update(user_id: int, request: Request, user: User = Master, db: S
     try:
         data = UserUpdate(project_limit=_limit(form), small_project_limit=_limit(form, "small_project_limit"),
                           is_active=form.get("is_active") is not None,
-                          password=form.get("password") or None,
+                          password=form.get("password") or None, locale=target.locale,
                           **{k: form.get(k) for k in ("first_name", "last_name", "phone", "email")})
         service.update_user(db, target, data)
     except (ValidationError, ValueError) as exc:
