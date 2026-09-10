@@ -11,6 +11,7 @@ from . import auth, config, service
 from .db import get_db
 from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
+from .pdf import raster
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
@@ -281,6 +282,28 @@ def project_pdf(project_id: int, user: User = CurrentUser, db: Session = Depends
         raise HTTPException(422, str(exc)) from exc
     headers = {"Content-Disposition": f'attachment; filename="{service.pdf_filename(project)}"'}
     return Response(content=pdf, media_type="application/pdf", headers=headers)
+
+
+@router.get("/projects/{project_id}/png")
+def project_png(project_id: int, dpi: float = raster.DEFAULT_DPI, user: User = CurrentUser, db: Session = Depends(get_db)):
+    project = _project_or_404(db, project_id, user)
+    try:
+        image = service.generate_image(project, "png", dpi)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    headers = {"Content-Disposition": f'attachment; filename="{service.image_filename(project, "png")}"'}
+    return Response(content=image, media_type="image/png", headers=headers)
+
+
+@router.get("/projects/{project_id}/tiff")
+def project_tiff(project_id: int, dpi: float = raster.DEFAULT_DPI, user: User = CurrentUser, db: Session = Depends(get_db)):
+    project = _project_or_404(db, project_id, user)
+    try:
+        image = service.generate_image(project, "tiff", dpi)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    headers = {"Content-Disposition": f'attachment; filename="{service.image_filename(project, "tiff")}"'}
+    return Response(content=image, media_type="image/tiff", headers=headers)
 
 
 # ---------------------------------------------------------------- background library (per user)

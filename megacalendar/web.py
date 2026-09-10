@@ -17,6 +17,7 @@ from . import auth, config, service
 from .db import get_db
 from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
+from .pdf import raster
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
@@ -438,6 +439,34 @@ def download_pdf(project_id: int, request: Request, user: User = CurrentUser, db
         )
     headers = {"Content-Disposition": f'attachment; filename="{service.pdf_filename(project)}"'}
     return Response(content=pdf, media_type="application/pdf", headers=headers)
+
+
+@router.get("/projects/{project_id}/png")
+def download_png(project_id: int, request: Request, dpi: float = raster.DEFAULT_DPI, user: User = CurrentUser,
+                 db: Session = Depends(get_db)):
+    project = _project_or_404(db, project_id, user)
+    try:
+        image = service.generate_image(project, "png", dpi)
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            request, "project.html", _project_ctx(request, db, project, errors=[str(exc)]), status_code=422
+        )
+    headers = {"Content-Disposition": f'attachment; filename="{service.image_filename(project, "png")}"'}
+    return Response(content=image, media_type="image/png", headers=headers)
+
+
+@router.get("/projects/{project_id}/tiff")
+def download_tiff(project_id: int, request: Request, dpi: float = raster.DEFAULT_DPI, user: User = CurrentUser,
+                  db: Session = Depends(get_db)):
+    project = _project_or_404(db, project_id, user)
+    try:
+        image = service.generate_image(project, "tiff", dpi)
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            request, "project.html", _project_ctx(request, db, project, errors=[str(exc)]), status_code=422
+        )
+    headers = {"Content-Disposition": f'attachment; filename="{service.image_filename(project, "tiff")}"'}
+    return Response(content=image, media_type="image/tiff", headers=headers)
 
 
 # ---------------------------------------------------------------- profile (every user)

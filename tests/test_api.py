@@ -55,6 +55,37 @@ def test_project_crud_and_pdf(client):
     assert client.get(f"/api/projects/{pid}").status_code == 404
 
 
+def test_png_and_tiff_export(client):
+    p = _create(client, page_size="A4", color_mode="CMYK")
+    pid = p["id"]
+
+    r = client.get(f"/api/projects/{pid}/png?dpi=72")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert 'office-2027-A4.png' in r.headers["content-disposition"]
+    img = Image.open(io.BytesIO(r.content))
+    assert img.format == "PNG" and img.mode == "RGB"  # PNG has no CMYK colour type: always a preview
+    assert abs(img.width - 596) < 3 and abs(img.height - 842) < 3  # A4 portrait at 72 dpi
+
+    r = client.get(f"/api/projects/{pid}/tiff?dpi=72")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/tiff"
+    assert 'office-2027-A4.tiff' in r.headers["content-disposition"]
+    img = Image.open(io.BytesIO(r.content))
+    assert img.format == "TIFF" and img.mode == "CMYK"  # keeps the project's own colour model
+    assert img.size == (596, 842)
+
+    rgb = _create(client, name="Rgb office", page_size="A4", color_mode="RGB")
+    img = Image.open(io.BytesIO(client.get(f"/api/projects/{rgb['id']}/tiff?dpi=72").content))
+    assert img.mode == "RGB"
+
+    assert client.get(f"/api/projects/{pid}/png?dpi=1000").status_code == 422
+    assert client.get(f"/api/projects/{pid}/png?dpi=10").status_code == 422
+
+    web_client_html = client.get(f"/projects/{pid}").text
+    assert f'/projects/{pid}/png' in web_client_html and f'/projects/{pid}/tiff' in web_client_html
+    r = client.get(f"/projects/{pid}/tiff?dpi=72")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/tiff"
+
+
 def test_validation(client):
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "margin_mm": 10.5}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "page_size": "A6"}).status_code == 422

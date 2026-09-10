@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from . import config
 from .auth import hash_password, verify_password
 from .models import BackgroundAsset, DayOverride, DeliveryAddress, Project, User
-from .pdf import CalendarSpec, DayStyle, color_from_dict, render_calendar, to_mode
+from .pdf import CalendarSpec, DayStyle, color_from_dict, render_calendar, render_to_image, to_mode
 from .pdf.render import max_month_gap_mm
 from .schemas import (AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate, RegisterIn,
                       UserCreate, UserUpdate)
@@ -466,7 +466,21 @@ def generate_pdf(project: Project) -> bytes:
     return buf.getvalue()
 
 
-def pdf_filename(project: Project) -> str:
+def generate_image(project: Project, fmt: str, dpi: float | None = None) -> bytes:
+    """PNG (RGB preview) or TIFF (keeps the project's own colour model) raster of the PDF."""
+    kwargs = {} if dpi is None else {"dpi": dpi}
+    return render_to_image(generate_pdf(project), fmt, project.color_mode, **kwargs)
+
+
+def _export_slug(project: Project) -> str:
     slug = re.sub(r"[^A-Za-z0-9]+", "-", project.name).strip("-").lower() or "calendar"
     period = f"{project.year}-{project.month:02d}" if project.kind == "month" else str(project.year)
-    return f"{slug}-{period}-{project.page_size}.pdf"
+    return f"{slug}-{period}-{project.page_size}"
+
+
+def pdf_filename(project: Project) -> str:
+    return f"{_export_slug(project)}.pdf"
+
+
+def image_filename(project: Project, fmt: str) -> str:
+    return f"{_export_slug(project)}.{'png' if fmt == 'png' else 'tiff'}"
