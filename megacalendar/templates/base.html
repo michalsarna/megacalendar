@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}megacalendar{% endblock %}</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>(function () { var t = localStorage.getItem("theme"); if (t) document.documentElement.setAttribute("data-theme", t); })();</script>
   <link rel="stylesheet" href="/static/style.css">
   {% block head %}{% endblock %}
 </head>
@@ -13,6 +14,7 @@
   <h1><a href="/">megacalendar</a></h1>
   <span class="hint">print-ready A0/A1 wall calendars</span>
   <nav class="nav">
+    <button type="button" id="theme-toggle" title="Switch between light, dark and system colour theme"></button>
     {% if user %}
       <a href="/projects">Projects</a>
       <a href="/profile">Profile</a>
@@ -31,5 +33,22 @@
   {% block content %}{% endblock %}
 </main>
 <footer class="site-footer">megacalendar by DeerTeam · Copyright 2026</footer>
+<script>
+// ---- Theme toggle: cycles System -> Light -> Dark -> System. "System" (no stored preference)
+// follows prefers-color-scheme live, including while this tab stays open across an OS theme switch.
+(() => {
+  const NEXT = { system: "light", light: "dark", dark: "system" };
+  const LABEL = { system: "Theme: System", light: "Theme: Light", dark: "Theme: Dark" };
+  const btn = document.getElementById("theme-toggle");
+  const current = () => document.documentElement.getAttribute("data-theme") || "system";
+  const apply = mode => {
+    if (mode === "system") { document.documentElement.removeAttribute("data-theme"); localStorage.removeItem("theme"); }
+    else { document.documentElement.setAttribute("data-theme", mode); localStorage.setItem("theme", mode); }
+    btn.textContent = LABEL[mode];
+  };
+  apply(current());
+  btn.addEventListener("click", () => apply(NEXT[current()]));
+})();
+</script>
 </body>
 </html>
