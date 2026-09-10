@@ -213,8 +213,10 @@ def test_month_calendar_defaults_and_title_toggle(make_user):
     jo = make_user("jo", "jopw12345")
     p = jo.post("/api/projects", json={"name": "Jan", "year": 2027, "kind": "month", "month": 1}).json()
     assert (p["page_size"], p["day_number_scale"], p["day_number_align"], p["show_title"]) == ("A4", 50, "left", True)
+    assert (p["day_number_valign"], p["day_border_color"]) == ("top", {"r": 77, "g": 77, "b": 77})  # planner style, border on
     y = jo.post("/api/projects", json={"name": "Y", "year": 2027}).json()
     assert (y["page_size"], y["day_number_scale"], y["day_number_align"]) == ("A1", 100, "center")
+    assert (y["day_number_valign"], y["day_border_color"]) == ("middle", None)  # grid year calendars: no border by default
     # explicit values win over the month defaults
     jo2 = make_user("jo2", "jopw12345", small_project_limit=3)
     p2 = jo2.post("/api/projects", json={"name": "Feb", "year": 2027, "kind": "month", "month": 2, "page_size": "A3",
@@ -250,7 +252,12 @@ def test_day_alignment_and_hidden_header_render():
     center = day_positions(CalendarSpec(day_number_align="center", **base))
     right = day_positions(CalendarSpec(day_number_align="right", **base))
     assert left[1][0] < center[1][0] < right[1][0]  # same cell, x grows with the alignment
-    assert left[1][1] > center[1][1]  # corner numbers sit near the top of the cell
+    assert left[1][1] == center[1][1] == right[1][1]  # horizontal alignment never moves the baseline
+
+    top = day_positions(CalendarSpec(day_number_valign="top", **base))
+    middle = day_positions(CalendarSpec(day_number_valign="middle", **base))
+    bottom = day_positions(CalendarSpec(day_number_valign="bottom", **base))
+    assert top[1][1] > middle[1][1] > bottom[1][1]  # vertical alignment is independent of horizontal
 
     with_header = compute_frame(CalendarSpec(**base))
     without = compute_frame(CalendarSpec(show_title=False, **base))
@@ -259,3 +266,47 @@ def test_day_alignment_and_hidden_header_render():
     assert b"(Team)" not in content and b"(2027)" not in content
     with pytest.raises(ValueError, match="day number alignment"):
         _render(CalendarSpec(day_number_align="top", **base))
+    with pytest.raises(ValueError, match="vertical alignment"):
+        _render(CalendarSpec(day_number_valign="left", **base))
+
+
+def test_table_layout_alignment():
+    def day_positions(spec):
+        content = _content(spec)
+        return {int(m.group(3)): (float(m.group(1)), float(m.group(2))) for m in
+                re.finditer(rb"BT 1 0 0 1 ([\d.]+) ([\d.]+) Tm /F\d\+0 [\d.]+ Tf [^\n]*\((\d+)\) Tj", content)}
+
+    base = dict(year=2027, layout="columns", day_number_scale=50)
+    left = day_positions(CalendarSpec(day_number_align="left", **base))
+    center = day_positions(CalendarSpec(day_number_align="center", **base))
+    right = day_positions(CalendarSpec(day_number_align="right", **base))
+    assert left[1][0] < center[1][0] < right[1][0]  # table style now honours horizontal alignment
+    assert left[1][1] == center[1][1] == right[1][1]
+
+    top = day_positions(CalendarSpec(day_number_valign="top", **base))
+    middle = day_positions(CalendarSpec(day_number_valign="middle", **base))
+    bottom = day_positions(CalendarSpec(day_number_valign="bottom", **base))
+    assert top[1][1] > middle[1][1] > bottom[1][1]
+
+
+def test_new_project_color_and_border_defaults(client):
+    y = client.post("/api/projects", json={"name": "Y grid", "year": 2027}).json()
+    assert y["month_border_color"] == {"r": 224, "g": 224, "b": 224}  # light grey, on by default everywhere
+    assert y["weekend_color"] == {"r": 224, "g": 224, "b": 224}
+    assert y["day_border_color"] is None  # grid-style year calendars: off by default
+    assert (y["day_number_scale"], y["day_number_align"]) == (100, "center")
+
+    t = client.post("/api/projects", json={"name": "Y table", "year": 2027, "layout": "columns"}).json()
+    assert t["day_border_color"] == {"r": 77, "g": 77, "b": 77}  # dark grey, on by default in table style
+    assert t["month_border_color"] == {"r": 224, "g": 224, "b": 224}
+    assert (t["day_number_scale"], t["day_number_align"]) == (50, "left")
+
+    m = client.post("/api/projects", json={"name": "Month", "year": 2027, "kind": "month", "month": 6}).json()
+    assert m["day_border_color"] == {"r": 77, "g": 77, "b": 77}
+
+    # explicit values still win over every new default
+    y2 = client.post("/api/projects", json={"name": "Y2", "year": 2027, "month_border_color": None}).json()
+    assert y2["month_border_color"] is None
+    t2 = client.post("/api/projects", json={"name": "T2", "year": 2027, "layout": "columns",
+                                            "day_number_align": "right", "day_border_color": None}).json()
+    assert t2["day_number_align"] == "right" and t2["day_border_color"] is None

@@ -12,7 +12,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_valida
 from . import config
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
-from .pdf.spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
+from .pdf.spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, RGB, TITLE_ALIGNS, VALIGNS, color_from_dict, to_mode
 
 BACKGROUND_MODES = ("cover", "contain", "stretch")
 
@@ -53,7 +53,7 @@ DEFAULT_COLORS: dict[str, dict[str, dict | None]] = {
         "weekday_color": None,
         "weekend_color": {"r": 224, "g": 224, "b": 224},
         "holiday_color": {"r": 229, "g": 57, "b": 53},
-        "month_border_color": None,
+        "month_border_color": {"r": 224, "g": 224, "b": 224},
         "day_border_color": None,
         "holiday_day_number_color": None,
         "holiday_day_name_color": None,
@@ -64,7 +64,7 @@ DEFAULT_COLORS: dict[str, dict[str, dict | None]] = {
         "weekday_color": None,
         "weekend_color": {"c": 0, "m": 0, "y": 0, "k": 12},
         "holiday_color": {"c": 0, "m": 90, "y": 80, "k": 0},
-        "month_border_color": None,
+        "month_border_color": {"c": 0, "m": 0, "y": 0, "k": 12},
         "day_border_color": None,
         "holiday_day_number_color": None,
         "holiday_day_name_color": None,
@@ -124,6 +124,8 @@ class ProjectBase(BaseModel):
     day_names_uppercase: bool = False
     day_number_scale: float = Field(default=100, ge=10, le=300)
     day_number_align: str = "center"
+    day_number_valign: str = "middle"
+    day_name_valign: str = "middle"
     title_font: str | None = None
     title_scale: float = Field(default=100, ge=25, le=300)
     year_font: str | None = None
@@ -225,6 +227,13 @@ class ProjectBase(BaseModel):
             raise ValueError(f"day_number_align must be one of {DAY_ALIGNS}")
         return v
 
+    @field_validator("day_number_valign", "day_name_valign")
+    @classmethod
+    def _valign(cls, v: str) -> str:
+        if v not in VALIGNS:
+            raise ValueError(f"vertical alignment must be one of {VALIGNS}")
+        return v
+
     @field_validator("title_align", "year_align", "logo_align")
     @classmethod
     def _title_align(cls, v: str) -> str:
@@ -304,7 +313,18 @@ class ProjectBase(BaseModel):
 PROJECT_KINDS = ("year", "month")
 
 
-MONTH_CALENDAR_DEFAULTS = {"page_size": "A4", "day_number_scale": 50, "day_number_align": "left", "month_name_scale": 50, "week_number_scale": 50}
+DARK_GRAY_HEX = "#4d4d4d"  # default day-border colour where day borders are on by default
+
+MONTH_CALENDAR_DEFAULTS = {"page_size": "A4", "day_number_scale": 50, "day_number_align": "left",
+                          "day_number_valign": "top", "month_name_scale": 50, "week_number_scale": 50}
+# Colour defaults are kept separate from the scalar ones above: for a nullable colour, None is a
+# meaningful, explicit "no border" choice and must never be treated the same as "field absent".
+MONTH_CALENDAR_COLOR_DEFAULTS = {"day_border_color": DARK_GRAY_HEX}
+
+# Year calendars in table style: smaller, left-aligned day numbers and a visible day border,
+# same as one-month calendars but without touching the grid-style defaults.
+TABLE_YEAR_DEFAULTS = {"day_number_scale": 50, "day_number_align": "left"}
+TABLE_YEAR_COLOR_DEFAULTS = {"day_border_color": DARK_GRAY_HEX}
 
 
 class ProjectCreate(ProjectBase):
@@ -313,16 +333,24 @@ class ProjectCreate(ProjectBase):
 
     @model_validator(mode="before")
     @classmethod
-    def _month_defaults(cls, data):
+    def _kind_layout_defaults(cls, data):
         """One-month calendars start as A4 planners: small day numbers in the top-left corner.
-        Absent/blank values fall back to the kind's defaults instead of failing validation."""
+        Year calendars started in table style get the same day-number treatment plus a day border.
+        Absent/blank scalar values fall back to these defaults instead of failing validation; an
+        explicit day_border_color (including null, to disable it) always wins over the default."""
         if isinstance(data, dict):
-            for key in MONTH_CALENDAR_DEFAULTS:
+            for key in set(MONTH_CALENDAR_DEFAULTS) | set(TABLE_YEAR_DEFAULTS):
                 if data.get(key) in (None, ""):
                     data.pop(key, None)
-            if data.get("kind") == "month":
-                for key, value in MONTH_CALENDAR_DEFAULTS.items():
-                    data.setdefault(key, value)
+            is_month = data.get("kind") == "month"
+            is_table_year = not is_month and data.get("layout") == "columns"
+            defaults = MONTH_CALENDAR_DEFAULTS if is_month else (TABLE_YEAR_DEFAULTS if is_table_year else {})
+            color_defaults = MONTH_CALENDAR_COLOR_DEFAULTS if is_month else (TABLE_YEAR_COLOR_DEFAULTS if is_table_year else {})
+            for key, value in defaults.items():
+                data.setdefault(key, value)
+            for key, value in color_defaults.items():
+                if key not in data:
+                    data[key] = value
         return data
 
     @model_validator(mode="after")

@@ -9,6 +9,7 @@ from reportlab.lib.colors import CMYKColor, Color as RLColor
 
 COLOR_MODES = ("RGB", "CMYK")
 DAY_ALIGNS = ("left", "center", "right")
+VALIGNS = ("top", "middle", "bottom")
 LAYOUTS = ("grid", "columns")
 TITLE_ALIGNS = ("left", "center", "right")
 
@@ -153,7 +154,9 @@ class CalendarSpec:
     month_names_uppercase: bool = False
     day_names_uppercase: bool = False
     day_number_scale: float = 100.0  # percent of the automatic day-number size
-    day_number_align: str = "center"  # grid cells: left (top-left corner) | center | right (top-right corner)
+    day_number_align: str = "center"  # horizontal: left | center | right
+    day_number_valign: str = "middle"  # vertical: top | middle | bottom
+    day_name_valign: str = "middle"  # vertical position of weekday header labels / table-style day names
     # Per-element typography. Font None = the project font_family; scales are percent of the automatic size.
     title_font: str | None = None
     title_scale: float = 100.0

@@ -22,7 +22,7 @@ from .background import artwork_size, draw_artwork, draw_background
 from .days import DayClassifier
 from .fonts import FontPair, register_family
 from .pagesizes import get_page_size
-from .spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, TITLE_ALIGNS, CalendarSpec, DayStyle
+from .spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, TITLE_ALIGNS, VALIGNS, CalendarSpec, DayStyle
 
 MAX_GAP_SHARE = 0.5  # month gaps may use at most this share of the available width/height
 DAY_ROWS = 6  # grid layout: every month fits in 6 weeks; fixed so all months align
@@ -167,14 +167,19 @@ def _draw_centered(c: Canvas, text: str, font: str, size: float, x: float, y: fl
     c.drawCentredString(x + w / 2, baseline_for_vcenter(font, size, y, h), text)
 
 
-def _day_number_baseline(font: str, size: float, cy: float, cell_w: float, cell_h: float, align: str) -> float:
-    """Baseline for a day/week number: vertically centred for "center", top corner (planner
-    style) otherwise. Shared by day and week numbers so they always line up on the same row."""
-    if align == "center":
-        return baseline_for_vcenter(font, size, cy, cell_h)
-    pad = min(cell_w, cell_h) * 0.08
-    ascent, _ = pdfmetrics.getAscentDescent(font, size)
-    return cy + cell_h - pad - ascent
+def _valign_baseline(font: str, size: float, cy: float, cell_w: float, cell_h: float, valign: str) -> float:
+    """Vertical baseline within a cell/row: top, middle or bottom, independent of horizontal
+    alignment. Shared by day numbers, week numbers and day names so a chosen vertical position
+    lines every element in a row up together."""
+    if valign == "top":
+        pad = min(cell_w, cell_h) * 0.08
+        ascent, _ = pdfmetrics.getAscentDescent(font, size)
+        return cy + cell_h - pad - ascent
+    if valign == "bottom":
+        pad = min(cell_w, cell_h) * 0.08
+        _, descent = pdfmetrics.getAscentDescent(font, size)
+        return cy + pad - descent
+    return baseline_for_vcenter(font, size, cy, cell_h)
 
 
 def shared_font_size(labels, font: str, max_size: float, max_width: float) -> float:
@@ -306,8 +311,10 @@ def _draw_month_grid(
     for label in ordered_days:
         dow_size = min(dow_size, fit_font_size(label, fonts.day_name.regular, dow_size, cell_w * 0.9))
     dow_y = y_top - header_h - dow_h
+    name_baseline = _valign_baseline(fonts.day_name.regular, dow_size, dow_y, cell_w, dow_h, spec.day_name_valign)
+    c.setFont(fonts.day_name.regular, dow_size)
     for i, label in enumerate(ordered_days):
-        _draw_centered(c, label, fonts.day_name.regular, dow_size, x + week_w + i * cell_w, dow_y, cell_w, dow_h)
+        c.drawCentredString(x + week_w + i * cell_w + cell_w / 2, name_baseline, label)
 
     # Day cells
     weeks = calendar.Calendar(firstweekday=spec.week_start).monthdatescalendar(spec.year, month)
@@ -322,7 +329,7 @@ def _draw_month_grid(
             continue
         if spec.show_week_numbers:
             c.setFillColor(spec.paint(spec.week_number_color))
-            week_baseline = _day_number_baseline(day_font, week_size, cy, cell_w, cell_h, spec.day_number_align)
+            week_baseline = _valign_baseline(day_font, week_size, cy, cell_w, cell_h, spec.day_number_valign)
             c.setFont(day_font, week_size)
             c.drawCentredString(x + week_w / 2, week_baseline, str(in_month[0].isocalendar()[1]))
         for i, d in enumerate(week):
@@ -334,7 +341,7 @@ def _draw_month_grid(
                 c.setFillColor(spec.paint(bg))
                 c.rect(cx, cy, cell_w, cell_h, stroke=0, fill=1)
             c.setFillColor(spec.paint(classifier.day_number_color(d)))
-            baseline = _day_number_baseline(day_font, day_size, cy, cell_w, cell_h, spec.day_number_align)
+            baseline = _valign_baseline(day_font, day_size, cy, cell_w, cell_h, spec.day_number_valign)
             c.setFont(day_font, day_size)
             if spec.day_number_align == "center":
                 c.drawCentredString(cx + cell_w / 2, baseline, str(d.day))
@@ -407,7 +414,8 @@ def _draw_month_column(
     for label in day_names.values():
         name_size = min(name_size, fit_font_size(label, dname_font, name_size, col_w * 0.34))
     week_size = base_size * 0.6
-    num_right = x + pad + pdfmetrics.stringWidth("00", num_font, num_size)
+    num_left = x + pad
+    num_right = num_left + pdfmetrics.stringWidth("00", num_font, num_size)
     name_left = num_right + col_w * 0.08
     ndays = calendar.monthrange(spec.year, month)[1]
 
@@ -420,16 +428,23 @@ def _draw_month_column(
             c.rect(x, cy, col_w, row_h, stroke=0, fill=1)
         c.setFillColor(spec.paint(classifier.day_number_color(d)))
         c.setFont(num_font, num_size)
-        c.drawRightString(num_right, baseline_for_vcenter(num_font, num_size, cy, row_h), str(d.day))
+        num_baseline = _valign_baseline(num_font, num_size, cy, col_w, row_h, spec.day_number_valign)
+        if spec.day_number_align == "left":
+            c.drawString(num_left, num_baseline, str(d.day))
+        elif spec.day_number_align == "right":
+            c.drawRightString(num_right, num_baseline, str(d.day))
+        else:
+            c.drawCentredString((num_left + num_right) / 2, num_baseline, str(d.day))
         if spec.table_day_names:
             c.setFillColor(spec.paint(classifier.day_name_color(d)))
             c.setFont(dname_font, name_size)
-            c.drawString(name_left, baseline_for_vcenter(dname_font, name_size, cy, row_h), day_names[d.weekday()])
+            name_baseline = _valign_baseline(dname_font, name_size, cy, col_w, row_h, spec.day_name_valign)
+            c.drawString(name_left, name_baseline, day_names[d.weekday()])
         if spec.show_week_numbers and (d.weekday() == spec.week_start or d.day == 1):
             c.setFillColor(spec.paint(spec.week_number_color))
             c.setFont(num_font, week_size)
-            c.drawRightString(x + col_w - pad, baseline_for_vcenter(num_font, week_size, cy, row_h),
-                              str(d.isocalendar()[1]))
+            week_baseline = _valign_baseline(num_font, week_size, cy, col_w, row_h, spec.day_number_valign)
+            c.drawRightString(x + col_w - pad, week_baseline, str(d.isocalendar()[1]))
 
     # Per-day borders, after all fills so they stay visible
     if spec.day_border_color is not None:
@@ -536,6 +551,8 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
         raise ValueError(f"month must be 1-12, got {spec.month}")
     if spec.day_number_align not in DAY_ALIGNS:
         raise ValueError(f"unknown day number alignment {spec.day_number_align!r}; choose one of {DAY_ALIGNS}")
+    if spec.day_number_valign not in VALIGNS or spec.day_name_valign not in VALIGNS:
+        raise ValueError(f"unknown vertical alignment; choose one of {VALIGNS}")
     if spec.title_align not in TITLE_ALIGNS or spec.year_align not in TITLE_ALIGNS:
         raise ValueError(f"unknown title alignment; choose one of {TITLE_ALIGNS}")
     frame = compute_frame(spec)
