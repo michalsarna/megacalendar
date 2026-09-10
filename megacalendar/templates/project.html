@@ -242,7 +242,7 @@
   <thead><tr><th>Date</th><th>Background</th><th>Day number</th><th>Day name</th><th>Note</th><th></th></tr></thead>
   <tbody>
   {% for o in project.day_overrides %}
-    <tr class="clickable" data-day="{{ o.day }}" data-note="{{ o.note or '' }}" data-color='{{ o.color|tojson }}' data-number='{{ o.day_number_color|tojson }}' data-name='{{ o.day_name_color|tojson }}' title="Click to edit">
+    <tr class="clickable" data-ov-day="{{ o.day }}" data-ov-note="{{ o.note or '' }}" data-ov-color='{{ o.color|tojson }}' data-ov-number='{{ o.day_number_color|tojson }}' data-ov-name='{{ o.day_name_color|tojson }}' title="Click to edit">
       <td>{{ o.day }}</td>
       <td>{{ swatch_cell(o.color, "none (paper)") }}</td>
       <td>{{ swatch_cell(o.day_number_color, "normal") }}</td>
@@ -278,9 +278,10 @@ const hexToCmyk = hex => {
 };
 const rgbToHex = c => '#' + [c.r, c.g, c.b].map(v => (+v).toString(16).padStart(2, '0')).join('');
 const widgets = {};  // name -> { set(value|null) }
-document.querySelectorAll('[data-color]').forEach(box => {
+document.querySelectorAll('.color[data-color]').forEach(box => {
   const toggle = box.querySelector('input[type=checkbox]');
   const picker = box.querySelector('.picker');
+  if (!picker) { console.error('colour widget without picker:', box.dataset.color); return; }
   const numbers = [...box.querySelectorAll('input[type=number]')];
   const swatch = box.querySelector('.swatch');
   const hexLabel = box.querySelector('.hex');
@@ -374,13 +375,13 @@ document.querySelectorAll('[data-color]').forEach(box => {
   limit();
   const defaults = { color: {{ default_bg|tojson }}, number: null, name: null };
   const load = row => {
-    const [, m, d] = row.dataset.day.split('-');
+    const [, m, d] = row.dataset.ovDay.split('-');
     month.value = +m; limit(); day.value = +d;
-    note.value = row.dataset.note;
-    widgets.ov_color.set(JSON.parse(row.dataset.color));
-    widgets.ov_number_color.set(JSON.parse(row.dataset.number));
-    widgets.ov_name_color.set(JSON.parse(row.dataset.name));
-    submit.textContent = 'Update ' + row.dataset.day;
+    note.value = row.dataset.ovNote;
+    widgets.ov_color.set(JSON.parse(row.dataset.ovColor));
+    widgets.ov_number_color.set(JSON.parse(row.dataset.ovNumber));
+    widgets.ov_name_color.set(JSON.parse(row.dataset.ovName));
+    submit.textContent = 'Update ' + row.dataset.ovDay;
     reset.hidden = false;
     document.querySelectorAll('#ov-list tr.selected').forEach(r => r.classList.remove('selected'));
     row.classList.add('selected');

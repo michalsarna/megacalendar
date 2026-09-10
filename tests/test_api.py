@@ -244,7 +244,9 @@ def test_html_ui_roundtrip(client):
     assert 'name="ov_name_color' in page and '<select name="locale">' in page and "Polish (pl)" in page
     assert 'id="year-options"' in page and 'name="year_color"' in page and "Title on sheet" not in page
     assert "<legend>Months</legend>" in page and "<legend>Days</legend>" in page and "<legend>Colours" not in page
-    assert 'data-day="2027-12-24"' in page and 'data-note="Eve"' in page and 'id="ov-submit"' in page
+    assert 'data-ov-day="2027-12-24"' in page and 'data-ov-note="Eve"' in page and 'id="ov-submit"' in page
+    # `data-color` is reserved for colour widgets: any other element carrying it breaks the page script
+    assert page.count("data-color=") == page.count('class="color" data-color=')
     # grid layout: table-only controls and per-day day-name colours are inert, the general day-name colour is not
     assert 'class="row table-only dimmed" style="margin-top:.8rem" inert' in page
     assert page.count('class="field dimmed" data-dayname="perday" inert') == 2
