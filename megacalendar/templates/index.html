@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-head">
-  <h2>My projects <span class="hint">{{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }}{% endif %}</span></h2>
-  {% if can_create %}<a class="btn primary" href="/projects/new">+ New project</a>
-  {% else %}<span class="hint">Project limit reached ({{ user.project_limit }}). Ask the master user for more.</span>{% endif %}
+  <h2>My year calendars <span class="hint">{{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }}{% endif %}</span></h2>
+  {% if can_create %}<a class="btn primary" href="/projects/new">+ New year calendar</a>
+  {% else %}<span class="hint">Limit reached ({{ user.project_limit }}). Ask the master user for more.</span>{% endif %}
 </div>
 {% if projects %}
 <table>
@@ -26,7 +26,34 @@
   </tbody>
 </table>
 {% else %}
-<p class="hint">No projects yet.{% if can_create %} Use “New project” to create one.{% endif %}</p>
+<p class="hint">No year calendars yet.{% if can_create %} Use “New year calendar” to create one.{% endif %}</p>
+{% endif %}
+
+<div class="page-head">
+  <h2>My one-month calendars <span class="hint">{{ small_count }}{% if user.small_project_limit is not none %} of {{ user.small_project_limit }}{% endif %}</span></h2>
+  {% if can_create_small %}<a class="btn primary" href="/projects/new?kind=month">+ New one-month calendar</a>
+  {% else %}<span class="hint">Limit reached ({{ user.small_project_limit }}). Ask the master user for more.</span>{% endif %}
+</div>
+{% if small_projects %}
+<table>
+  <thead><tr><th>Name</th><th>Month</th><th>Sheet</th><th>Updated</th><th></th></tr></thead>
+  <tbody>
+  {% for p in small_projects %}
+    <tr>
+      <td><a href="/projects/{{ p.id }}">{{ p.name }}</a></td>
+      <td>{{ month_names[p.month] }} {{ p.year }}</td>
+      <td>{{ p.page_size }} {{ p.orientation }}</td>
+      <td>{{ p.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td class="row-actions">
+        <a class="btn" href="/projects/{{ p.id }}/pdf">PDF</a>
+        <form method="post" action="/projects/{{ p.id }}/delete" onsubmit="return confirm('Delete “{{ p.name }}”? This cannot be undone.')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit" title="Delete">Delete</button></form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="hint">No one-month calendars yet. Month and year are fixed once a one-month calendar is created.</p>
 {% endif %}
 
 <h2 id="backgrounds">My background library</h2>

@@ -21,12 +21,14 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(300), nullable=False)
     is_master: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
-    project_limit: Mapped[int | None] = mapped_column(Integer)  # None = unlimited (master); set by the service
+    project_limit: Mapped[int | None] = mapped_column(Integer)  # year calendars; None = unlimited (master)
+    small_project_limit: Mapped[int | None] = mapped_column(Integer)  # one-month calendars; None = unlimited
 
     first_name: Mapped[str | None] = mapped_column(String(100))
     last_name: Mapped[str | None] = mapped_column(String(100))
     phone: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(200))
+    locale: Mapped[str] = mapped_column(String(20), default="en", nullable=False, server_default="en")  # default calendar language
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
@@ -65,7 +67,9 @@ class Project(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), default="year", nullable=False, server_default="year")  # year | month
     year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int | None] = mapped_column(Integer)  # fixed at creation for kind == "month"
     title: Mapped[str | None] = mapped_column(String(200))
 
     page_size: Mapped[str] = mapped_column(String(10), default="A1", nullable=False)
@@ -76,6 +80,7 @@ class Project(Base):
     font_family: Mapped[str] = mapped_column(String(100), default="DejaVuSans", nullable=False)
     show_week_numbers: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     title_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
+    show_title: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
     show_year: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     year_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
     year_color: Mapped[dict | None] = mapped_column(JSON)  # None = same as title
@@ -83,6 +88,7 @@ class Project(Base):
     month_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_number_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
+    day_number_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
     # Per-element typography; font None = font_family
     title_font: Mapped[str | None] = mapped_column(String(100))
     title_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
@@ -93,6 +99,7 @@ class Project(Base):
     day_name_font: Mapped[str | None] = mapped_column(String(100))
     day_name_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     day_number_font: Mapped[str | None] = mapped_column(String(100))
+    week_number_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     legend_font: Mapped[str | None] = mapped_column(String(100))
     legend_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     table_day_names: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())

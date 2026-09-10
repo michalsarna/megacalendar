@@ -2,24 +2,30 @@
 {% block title %}New project · megacalendar{% endblock %}
 {% block content %}
 {% set v = values or {} %}
-<h2>New project</h2>
-<form method="post" action="/projects"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<h2>{{ "New one-month calendar" if kind == "month" else "New year calendar" }}</h2>
+{% if kind == "month" %}<p class="hint">The month and year of a one-month calendar are fixed once it is created.</p>{% endif %}
+<form method="post" action="/projects"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="{{ kind }}">
   <fieldset>
     <div class="row">
       <label>Name <input name="name" required maxlength="200" placeholder="Office wall {{ next_year }}" value="{{ v.get('name', '') }}" autofocus></label>
+      {% if kind == "month" %}
+      <label>Month
+        <select name="month" required>{% for m in range(1, 13) %}<option value="{{ m }}" {% if (v.get('month', this_month)|int) == m %}selected{% endif %}>{{ month_names[m] }}</option>{% endfor %}</select></label>
+      {% endif %}
       <label>Year <input name="year" type="number" min="1900" max="2200" value="{{ v.get('year', next_year) }}" required></label>
-      <label>Sheet <select name="page_size">{% for code, ps in page_sizes.items() %}<option value="{{ code }}" {% if v.get('page_size', 'A1') == code %}selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
+      {% set default_size = 'A4' if kind == 'month' else 'A1' %}
+      <label>Sheet <select name="page_size">{% for code, ps in page_sizes.items() %}<option value="{{ code }}" {% if v.get('page_size', default_size) == code %}selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
       <label>Orientation <select name="orientation">{% for o in orientations %}<option value="{{ o }}" {% if v.get('orientation', 'portrait') == o %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
-      <label>Layout
+      {% if kind != "month" %}<label>Layout
         <select name="layout">
           <option value="grid" {% if v.get('layout', 'grid') == 'grid' %}selected{% endif %}>Month grids</option>
           <option value="columns" {% if v.get('layout') == 'columns' %}selected{% endif %}>Table style</option>
-        </select></label>
+        </select></label>{% endif %}
       <label>Colour model <select name="color_mode">{% for m in color_modes %}<option value="{{ m }}" {% if v.get('color_mode', 'RGB') == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
     </div>
   </fieldset>
   <div class="actions">
-    <button class="primary" type="submit">Create project</button>
+    <button class="primary" type="submit">Create</button>
     <a class="btn" href="/projects">Cancel</a>
     <span class="hint">Everything else can be changed afterwards in the project editor.</span>
   </div>

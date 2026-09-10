@@ -71,12 +71,15 @@ def _bootstrap_users() -> None:
         master = db.scalar(select(User).where(User.is_master.is_(True)).order_by(User.id))
         if master is None:
             master = User(username=MASTER_USERNAME, password_hash=hash_password(MASTER_DEFAULT_PASSWORD),
-                          is_master=True, project_limit=None)
+                          is_master=True, project_limit=None, small_project_limit=None)
             db.add(master)
             db.flush()
         if config.DATABASE_URL.startswith("sqlite") and db.scalar(select(User).where(User.username == DEV_USERNAME)) is None:
             db.add(User(username=DEV_USERNAME, password_hash=hash_password(DEV_USER_PASSWORD), is_master=False,
-                        project_limit=5, first_name="Demo", last_name="User"))
+                        project_limit=5, small_project_limit=2, first_name="Demo", last_name="User"))
+        # users created before one-month calendars existed get the default allowance
+        for user in db.scalars(select(User).where(User.small_project_limit.is_(None), User.is_master.is_(False))):
+            user.small_project_limit = 2
         for model in (Project, BackgroundAsset):
             for row in db.scalars(select(model).where(model.owner_id.is_(None))):
                 row.owner_id = master.id

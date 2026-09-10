@@ -90,9 +90,9 @@ def test_layout_alignment_and_uppercase_roundtrip(client):
     page = client.get(url).text  # table style with day names off: every day-name colour control is inert
     assert page.count('class="field dimmed" data-dayname="all" inert') == 1
     assert page.count('class="field dimmed" data-dayname="perday" inert') == 2
-    assert 'class="row table-only" style="margin-top:.8rem">' in page  # table-only row active
+    assert 'class="table-only" ' in page and 'class="table-only dimmed"' not in page  # table-only controls active
     assert saved["day_border_color"] == {"r": 128, "g": 128, "b": 128} and saved["day_border_width_mm"] == 0.4
-    assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_number_scale": 10}).status_code == 422
+    assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_number_scale": 5}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_border_width_mm": 0}).status_code == 422
     assert saved["day_names_uppercase"] is True and saved["month_names_uppercase"] is False
     assert_print_ready(client.get(f"{url}/pdf").content, 841, 594, mode="RGB")
@@ -249,7 +249,8 @@ def test_html_ui_roundtrip(client):
     # `data-color` is reserved for colour widgets: any other element carrying it breaks the page script
     assert page.count("data-color=") == page.count('class="color" data-color=')
     # grid layout: table-only controls and per-day day-name colours are inert, the general day-name colour is not
-    assert 'class="row table-only dimmed" style="margin-top:.8rem" inert' in page
+    assert 'class="table-only dimmed" inert' in page  # table-only controls inert in the grid layout
+    assert "Day border colour (untick = no border)" in page  # day borders available in every layout
     assert page.count('class="field dimmed" data-dayname="perday" inert') == 2
     assert 'class="field dimmed" data-dayname="all" inert' not in page
     r = client.post(f"{url}/days", data={"month": "2", "day_of_month": "30", "form_color_mode": "RGB"})

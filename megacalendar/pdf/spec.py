@@ -8,6 +8,7 @@ from pathlib import Path
 from reportlab.lib.colors import CMYKColor, Color as RLColor
 
 COLOR_MODES = ("RGB", "CMYK")
+DAY_ALIGNS = ("left", "center", "right")
 LAYOUTS = ("grid", "columns")
 TITLE_ALIGNS = ("left", "center", "right")
 
@@ -134,6 +135,7 @@ class DayStyle:
 @dataclass
 class CalendarSpec:
     year: int
+    month: int | None = None  # set -> a one-month calendar (single big month grid)
     page_size: str = "A1"  # key into pagesizes.PAGE_SIZES
     orientation: str = "portrait"  # portrait | landscape
     margin_mm: float = 10.0
@@ -141,6 +143,7 @@ class CalendarSpec:
     week_start: int = 0  # 0 = Monday ... 6 = Sunday
     font_family: str = "DejaVuSans"
     title: str | None = None  # defaults to the year
+    show_title: bool = True  # False: no header band at all (title, year and logo), the grid uses the full height
     title_align: str = "center"  # left | center | right
     show_year: bool = False  # with a custom title: also print the year
     year_align: str = "center"  # same as title_align -> year goes under the title
@@ -150,6 +153,7 @@ class CalendarSpec:
     month_names_uppercase: bool = False
     day_names_uppercase: bool = False
     day_number_scale: float = 100.0  # percent of the automatic day-number size
+    day_number_align: str = "center"  # grid cells: left (top-left corner) | center | right (top-right corner)
     # Per-element typography. Font None = the project font_family; scales are percent of the automatic size.
     title_font: str | None = None
     title_scale: float = 100.0
@@ -160,6 +164,7 @@ class CalendarSpec:
     day_name_font: str | None = None
     day_name_scale: float = 100.0
     day_number_font: str | None = None
+    week_number_scale: float = 100.0
     legend_font: str | None = None
     legend_scale: float = 100.0
     table_day_names: bool = True  # table layout: show the day name next to each number

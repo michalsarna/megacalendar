@@ -12,7 +12,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_valida
 from . import config
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
-from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
+from .pdf.spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
 
 BACKGROUND_MODES = ("cover", "contain", "stretch")
 
@@ -114,6 +114,7 @@ class ProjectBase(BaseModel):
     week_start: int = Field(default=0, ge=0, le=6)
     font_family: str = config.DEFAULT_FONT_FAMILY
     show_week_numbers: bool = False
+    show_title: bool = True
     title_align: str = "center"
     show_year: bool = False
     year_align: str = "center"
@@ -121,7 +122,8 @@ class ProjectBase(BaseModel):
     layout: str = "grid"
     month_names_uppercase: bool = False
     day_names_uppercase: bool = False
-    day_number_scale: float = Field(default=100, ge=25, le=300)
+    day_number_scale: float = Field(default=100, ge=10, le=300)
+    day_number_align: str = "center"
     title_font: str | None = None
     title_scale: float = Field(default=100, ge=25, le=300)
     year_font: str | None = None
@@ -131,6 +133,7 @@ class ProjectBase(BaseModel):
     day_name_font: str | None = None
     day_name_scale: float = Field(default=100, ge=25, le=300)
     day_number_font: str | None = None
+    week_number_scale: float = Field(default=100, ge=25, le=300)
     legend_font: str | None = None
     legend_scale: float = Field(default=100, ge=25, le=300)
     table_day_names: bool = True
@@ -215,6 +218,13 @@ class ProjectBase(BaseModel):
             raise ValueError(f"layout must be one of {LAYOUTS}")
         return v
 
+    @field_validator("day_number_align")
+    @classmethod
+    def _day_align(cls, v: str) -> str:
+        if v not in DAY_ALIGNS:
+            raise ValueError(f"day_number_align must be one of {DAY_ALIGNS}")
+        return v
+
     @field_validator("title_align", "year_align", "logo_align")
     @classmethod
     def _title_align(cls, v: str) -> str:
@@ -260,7 +270,7 @@ class ProjectBase(BaseModel):
         return v
 
     @field_validator("font_family", "title_font", "year_font", "month_name_font", "day_name_font", "day_number_font",
-                     "legend_font", mode="before")
+                     "legend_font", mode="before")  # week_number_font intentionally omitted — week numbers share day_number_font
     @classmethod
     def _font(cls, v, info):
         if v is None or (isinstance(v, str) and not v.strip()):
@@ -291,12 +301,43 @@ class ProjectBase(BaseModel):
         return self
 
 
+PROJECT_KINDS = ("year", "month")
+
+
+MONTH_CALENDAR_DEFAULTS = {"page_size": "A4", "day_number_scale": 50, "day_number_align": "left", "month_name_scale": 50, "week_number_scale": 50}
+
+
 class ProjectCreate(ProjectBase):
-    pass
+    kind: str = "year"
+    month: int | None = Field(default=None, ge=1, le=12)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _month_defaults(cls, data):
+        """One-month calendars start as A4 planners: small day numbers in the top-left corner.
+        Absent/blank values fall back to the kind's defaults instead of failing validation."""
+        if isinstance(data, dict):
+            for key in MONTH_CALENDAR_DEFAULTS:
+                if data.get(key) in (None, ""):
+                    data.pop(key, None)
+            if data.get("kind") == "month":
+                for key, value in MONTH_CALENDAR_DEFAULTS.items():
+                    data.setdefault(key, value)
+        return data
+
+    @model_validator(mode="after")
+    def _kind_month(self):
+        if self.kind not in PROJECT_KINDS:
+            raise ValueError(f"kind must be one of {PROJECT_KINDS}")
+        if self.kind == "month" and self.month is None:
+            raise ValueError("a one-month calendar needs a month (1-12)")
+        if self.kind == "year":
+            self.month = None
+        return self
 
 
 class ProjectUpdate(ProjectBase):
-    pass
+    """Kind, month and year of an existing project cannot be changed."""
 
 
 class DayOverrideIn(BaseModel):
@@ -325,6 +366,8 @@ class BackgroundAssetRead(BaseModel):
 class ProjectRead(ProjectBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    kind: str
+    month: int | None
     background: BackgroundAssetRead | None = None
     logo: BackgroundAssetRead | None = None
     created_at: datetime
@@ -360,6 +403,16 @@ class ProfileUpdate(BaseModel):
     last_name: str | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=50)
     email: str | None = Field(default=None, max_length=200)
+    locale: str = config.DEFAULT_LOCALE  # default language of new calendars
+
+    @field_validator("locale")
+    @classmethod
+    def _locale(cls, v: str) -> str:
+        try:
+            Locale.parse(v)
+        except (UnknownLocaleError, ValueError) as exc:
+            raise ValueError(f"unknown language/locale {v!r}") from exc
+        return v
 
     @field_validator("first_name", "last_name", "phone", "email", mode="before")
     @classmethod
@@ -385,7 +438,8 @@ class PasswordChange(BaseModel):
 class UserCreate(ProfileUpdate):
     username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
     password: str = Field(min_length=MIN_PASSWORD, max_length=200)
-    project_limit: int | None = Field(default=1, ge=0)  # None = unlimited
+    project_limit: int | None = Field(default=1, ge=0)  # year calendars; None = unlimited
+    small_project_limit: int | None = Field(default=2, ge=0)  # one-month calendars; None = unlimited
     # contact details are mandatory when an account is created
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
@@ -393,8 +447,15 @@ class UserCreate(ProfileUpdate):
     email: str = Field(min_length=3, max_length=200)
 
 
+class RegisterIn(UserCreate):
+    """Self-registration: fixed allowances, contact details required (inherited)."""
+    project_limit: int | None = Field(default=1, frozen=True)
+    small_project_limit: int | None = Field(default=2, frozen=True)
+
+
 class UserUpdate(ProfileUpdate):
     project_limit: int | None = Field(default=1, ge=0)
+    small_project_limit: int | None = Field(default=2, ge=0)
     is_active: bool = True
     password: str | None = Field(default=None, min_length=MIN_PASSWORD, max_length=200)  # set to reset
 
@@ -406,8 +467,10 @@ class UserRead(ProfileUpdate):
     is_master: bool
     is_active: bool
     project_limit: int | None
+    small_project_limit: int | None
     created_at: datetime
     project_count: int = 0
+    small_project_count: int = 0
     addresses: list[AddressRead] = []
 
 

@@ -15,8 +15,8 @@ from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
 from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, DayOverrideIn, DayOverrideRead, LoginIn,
-                      MeRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, UserCreate,
-                      UserRead, UserUpdate)
+                      MeRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, RegisterIn,
+                      UserCreate, UserRead, UserUpdate)
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(verify_csrf)])
 CurrentUser = Depends(auth.current_user_api)
@@ -32,14 +32,16 @@ def _project_or_404(db: Session, project_id: int, user: User) -> Project:
 
 def _user_read(db: Session, user: User) -> UserRead:
     data = UserRead.model_validate(user)
-    data.project_count = service.project_count(db, user)
+    data.project_count = service.project_count(db, user, "year")
+    data.small_project_count = service.project_count(db, user, "month")
     return data
 
 
 def _me_read(db: Session, user: User, request: Request) -> MeRead:
     """Profile plus the CSRF token that session-authenticated clients must send with changes."""
     data = MeRead.model_validate(user)
-    data.project_count = service.project_count(db, user)
+    data.project_count = service.project_count(db, user, "year")
+    data.small_project_count = service.project_count(db, user, "month")
     data.csrf_token = csrf_token(request) if "session" in request.scope else None
     return data
 
@@ -54,6 +56,17 @@ def api_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
         login_throttle.failure(request, data.username)
         raise HTTPException(401, "wrong username or password")
     login_throttle.success(request, data.username)
+    auth.login(request, user)
+    return _me_read(db, user, request)
+
+
+@router.post("/auth/register", response_model=MeRead, status_code=201)
+def api_register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
+    """Self-registration: 1 year calendar and 2 one-month calendars; email and phone must be new."""
+    try:
+        user = service.register_user(db, data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     auth.login(request, user)
     return _me_read(db, user, request)
 
@@ -116,11 +129,12 @@ def delete_address(address_id: int, user: User = CurrentUser, db: Session = Depe
 
 @router.get("/users", response_model=list[UserRead])
 def list_users(_: User = Master, db: Session = Depends(get_db)):
-    counts = service.project_counts(db)
+    counts, small = service.project_counts(db, "year"), service.project_counts(db, "month")
     out = []
     for user in service.list_users(db):
         data = UserRead.model_validate(user)
         data.project_count = counts.get(user.id, 0)
+        data.small_project_count = small.get(user.id, 0)
         out.append(data)
     return out
 

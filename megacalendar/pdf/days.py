@@ -61,4 +61,7 @@ class DayClassifier:
         return self.spec.day_name_color
 
     def legend_entries(self) -> list[tuple[date, DayStyle]]:
-        return sorted(self.overrides.items())
+        items = self.overrides.items()
+        if self.spec.month is not None:
+            items = [(d, s) for d, s in items if d.month == self.spec.month]
+        return sorted(items)
