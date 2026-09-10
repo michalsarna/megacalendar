@@ -24,3 +24,5 @@ SELECT format('GRANT ALL ON SCHEMA public TO %I', :'user') \gexec
 SQL
 echo "PostgreSQL: database '$DB_NAME' owned by '$DB_USER' is ready."
 echo "Run the app with: DB_TYPE=postgres DB_HOST=${PGHOST:-localhost} DB_PORT=${PGPORT:-5432} DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD scripts/start.sh"
+echo "The application user 'master' (password 'master') is created automatically on first start;"
+echo "change it with: python scripts/manage_users.py set-password master"

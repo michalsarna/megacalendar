@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}megacalendar{% endblock %}</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="stylesheet" href="/static/style.css">
   {% block head %}{% endblock %}
 </head>
@@ -11,11 +12,24 @@
 <header>
   <h1><a href="/">megacalendar</a></h1>
   <span class="hint">print-ready A0/A1 wall calendars</span>
-  <a href="/docs" style="margin-left:auto">API docs</a>
+  <nav class="nav">
+    {% if user %}
+      <a href="/projects">Projects</a>
+      <a href="/profile">Profile</a>
+      {% if user.is_master %}<a href="/users">Users</a>{% endif %}
+      <a href="/docs">API</a>
+      <span class="who">{{ user.display_name }}{% if user.is_master %} · master{% endif %}</span>
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">Log out</button></form>
+    {% elif not on_login_page %}
+      <a class="btn primary" href="/login">Log in</a>
+    {% endif %}
+  </nav>
 </header>
 <main>
+  {% if user and default_password %}<div class="errors">The master account still uses the default password. <a href="/profile#password">Change it now</a>.</div>{% endif %}
   {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
   {% block content %}{% endblock %}
 </main>
+<footer class="site-footer">megacalendar by DeerTeam · Copyright 2026</footer>
 </body>
 </html>

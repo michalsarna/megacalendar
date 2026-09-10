@@ -2,7 +2,7 @@
 {% block title %}Upload · {{ project.name }} · megacalendar{% endblock %}
 {% block content %}
 <h2>Upload a file for “{{ project.name }}”</h2>
-<form method="post" action="/projects/{{ project.id }}/upload" enctype="multipart/form-data">
+<form method="post" action="/projects/{{ project.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
       <label>SVG, PNG or JPEG <input type="file" name="file" accept=".svg,.png,.jpg,.jpeg" required autofocus></label>

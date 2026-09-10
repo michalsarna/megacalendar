@@ -46,7 +46,7 @@
 {% if request.query_params.get("saved") %}<div class="ok">Saved.</div>{% endif %}
 <noscript><div class="errors">Autosave needs JavaScript; use the “Save project” button.</div></noscript>
 
-<form method="post" action="/projects/{{ project.id }}" id="settings">
+<form method="post" action="/projects/{{ project.id }}" id="settings"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="form_color_mode" value="{{ project.color_mode }}">
 
   <fieldset>
@@ -210,14 +210,14 @@
       <label>Opacity (%) <input name="background_opacity" type="number" min="0" max="100" step="1" value="{{ project.background_opacity|int }}"></label>
       <a class="btn" href="/projects/{{ project.id }}/upload?purpose=background">Upload a new background…</a>
     </div>
-    <p class="hint">Lower opacity fades the artwork towards the paper. Manage the shared library on the <a href="/#backgrounds">start page</a>.</p>
+    <p class="hint">Lower opacity fades the artwork towards the paper. Manage the shared library on the <a href="/projects#backgrounds">start page</a>.</p>
   </fieldset>
 </form>
 
 {% set default_bg = project.weekend_color or ({"c":0,"m":0,"y":0,"k":12} if project.color_mode == "CMYK" else {"r":224,"g":224,"b":224}) %}
 <h2 id="days">Private holidays</h2>
 <p class="hint">Single days with their own background and text colours. They beat public holidays and weekends, and appear in the legend when it is enabled. Click a row to load it into the form.</p>
-<form method="post" action="/projects/{{ project.id }}/days" id="private-holiday">
+<form method="post" action="/projects/{{ project.id }}/days" id="private-holiday"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="form_color_mode" value="{{ project.color_mode }}">
   <fieldset>
     <div class="row">
@@ -248,7 +248,7 @@
       <td>{{ swatch_cell(o.day_number_color, "normal") }}</td>
       <td>{{ swatch_cell(o.day_name_color, "normal") }}</td>
       <td>{{ o.note or "" }}</td>
-      <td><form method="post" action="/projects/{{ project.id }}/days/{{ o.day }}/delete"><button type="submit">Remove</button></form></td>
+      <td><form method="post" action="/projects/{{ project.id }}/days/{{ o.day }}/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Remove</button></form></td>
     </tr>
   {% endfor %}
   </tbody>
@@ -413,7 +413,8 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
     const renderedMode = form.querySelector('[name=form_color_mode]').value;
     const chosenMode = form.querySelector('[name=color_mode]').value;
     show('Saving…');
-    inflight = fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json' } })
+    const csrf = document.querySelector('meta[name=csrf-token]').content;
+    inflight = fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json', 'X-CSRF-Token': csrf } })
       .then(async res => {
         const data = await res.json().catch(() => ({ ok: false, errors: ['unexpected server response'] }));
         if (data.ok) {

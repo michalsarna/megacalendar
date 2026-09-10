@@ -9,6 +9,12 @@ FastAPI + SQLAlchemy + ReportLab app producing print-ready A0/A1 CMYK PDF year c
 - Hard print constraints: a single colour model per document (project `color_mode`, RGB default or CMYK;
   no Gray operators, no mixing), all fonts embedded, margins <= 10 mm.
   `tests/helpers.py::assert_print_ready` enforces these; keep it passing for any render change.
+- Multi-user: every service call that reads or writes projects/assets takes the owner (`service.get_project(db, id, user)`
+  returns None for other users' projects). Web routes use `auth.current_user_web` (redirects to /login), API routes
+  `auth.current_user_api` (401 + Basic challenge). Master user is bootstrapped in `db._bootstrap_users`.
+- CSRF: both routers depend on `security.verify_csrf`; HTML forms need `<input name="csrf_token">` (templates get
+  `csrf_token`), fetch calls the `X-CSRF-Token` header (meta tag in base.html); Basic-auth requests are exempt.
+- Tests: the `client` fixture is logged in as master and carries the CSRF header; `anon` is not; `make_user(name)` returns a client logged in as a new user.
 - `megacalendar/pdf/` must stay free of DB imports; `service.spec_from_project` is the bridge.
 - Colours are `CMYK` (percent) or `RGB` (0-255) dataclasses, stored as JSON dicts in the project's mode;
   `spec.paint()` converts to the document mode before drawing. Schemas normalise input to the mode.

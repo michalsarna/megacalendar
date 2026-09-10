@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Create user · megacalendar{% endblock %}
+{% block content %}
+{% set v = values or {} %}
+<h2>Create user</h2>
+<form method="post" action="/users"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <fieldset>
+    <legend>Account</legend>
+    <div class="row">
+      <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus></label>
+      <label>Password (min. 8) <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label>Project limit (blank = unlimited) <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Contact (required)</legend>
+    <div class="row">
+      <label>Name <input name="first_name" required maxlength="100" value="{{ v.get('first_name', '') }}"></label>
+      <label>Surname <input name="last_name" required maxlength="100" value="{{ v.get('last_name', '') }}"></label>
+      <label>Phone <input name="phone" required minlength="3" maxlength="50" value="{{ v.get('phone', '') }}"></label>
+      <label>Email <input name="email" type="email" required maxlength="200" value="{{ v.get('email', '') }}"></label>
+    </div>
+  </fieldset>
+  <div class="actions">
+    <button class="primary" type="submit">Create user</button>
+    <a class="btn" href="/users">Cancel</a>
+  </div>
+</form>
+{% endblock %}

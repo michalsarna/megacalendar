@@ -13,10 +13,57 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(300), nullable=False)
+    is_master: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
+    project_limit: Mapped[int | None] = mapped_column(Integer)  # None = unlimited (master); set by the service
+
+    first_name: Mapped[str | None] = mapped_column(String(100))
+    last_name: Mapped[str | None] = mapped_column(String(100))
+    phone: Mapped[str | None] = mapped_column(String(50))
+    email: Mapped[str | None] = mapped_column(String(200))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+    addresses: Mapped[list["DeliveryAddress"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", order_by="DeliveryAddress.id"
+    )
+    projects: Mapped[list["Project"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    assets: Mapped[list["BackgroundAsset"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+
+    @property
+    def display_name(self) -> str:
+        full = " ".join(p for p in (self.first_name, self.last_name) if p)
+        return full or self.username
+
+
+class DeliveryAddress(Base):
+    __tablename__ = "delivery_addresses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(100))  # e.g. "Office", "Home"
+    recipient: Mapped[str] = mapped_column(String(200), nullable=False)
+    street: Mapped[str] = mapped_column(String(200), nullable=False)
+    postal_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    city: Mapped[str] = mapped_column(String(100), nullable=False)
+    country: Mapped[str] = mapped_column(String(100), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(50))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
+
+    user: Mapped[User] = relationship(back_populates="addresses")
+
+
 class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str | None] = mapped_column(String(200))
@@ -91,6 +138,7 @@ class Project(Base):
         back_populates="projects", lazy="joined", foreign_keys=[background_asset_id]
     )
     logo: Mapped["BackgroundAsset | None"] = relationship(lazy="joined", foreign_keys=[logo_asset_id])
+    owner: Mapped[User | None] = relationship(back_populates="projects")
 
 
 class BackgroundAsset(Base):
@@ -99,6 +147,7 @@ class BackgroundAsset(Base):
     __tablename__ = "background_assets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     filename: Mapped[str] = mapped_column(String(300), nullable=False, unique=True)  # name on disk
     original_name: Mapped[str] = mapped_column(String(300), nullable=False)
     suffix: Mapped[str] = mapped_column(String(10), nullable=False)  # ".svg", ".png", ".jpg"
@@ -108,6 +157,7 @@ class BackgroundAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
     projects: Mapped[list[Project]] = relationship(back_populates="background", foreign_keys=[Project.background_asset_id])
+    owner: Mapped[User | None] = relationship(back_populates="assets")
 
 
 class DayOverride(Base):

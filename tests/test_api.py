@@ -14,9 +14,10 @@ def _create(client, **over):
     return r.json()
 
 
-def test_meta_lists_only_a0_a1(client):
+def test_meta_lists_sheet_sizes(client):
     meta = client.get("/api/meta").json()
-    assert sorted(meta["page_sizes"]) == ["A0", "A1"]
+    assert sorted(meta["page_sizes"]) == ["A0", "A1", "A2", "A3", "A4", "A5"]
+    assert meta["page_sizes"]["A5"] == {"width_mm": 148, "height_mm": 210}
     assert meta["color_modes"] == ["RGB", "CMYK"]
     assert meta["max_margin_mm"] == 10.0
     assert "DejaVuSans" in meta["fonts"]
@@ -56,7 +57,7 @@ def test_project_crud_and_pdf(client):
 
 def test_validation(client):
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "margin_mm": 10.5}).status_code == 422
-    assert client.post("/api/projects", json={"name": "x", "year": 2027, "page_size": "A2"}).status_code == 422
+    assert client.post("/api/projects", json={"name": "x", "year": 2027, "page_size": "A6"}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "holidays_enabled": True}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "font_family": "Comic"}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "color_mode": "LAB"}).status_code == 422
@@ -198,9 +199,9 @@ def test_html_ui_roundtrip(client):
 
     # Library upload from the start page, then pick it in the project form.
     r = client.post("/backgrounds", files={"file": ("lib.svg", SVG, "image/svg+xml")}, follow_redirects=False)
-    assert r.status_code == 303
+    assert r.status_code == 303 and r.headers["location"] == "/projects#backgrounds"
     asset_id = client.get("/api/backgrounds").json()[0]["id"]
-    assert "lib.svg" in client.get("/").text
+    assert "lib.svg" in client.get("/projects").text
 
     # Form rendered in RGB (the default): colour inputs are hex.
     form = {
@@ -349,6 +350,8 @@ def test_missing_columns_are_added_on_startup(tmp_path):
 
             project = db.get(Project, 1)
             assert project.background.original_name == "old-art.svg"
+            assert project.owner is not None and project.owner.username == "master"  # adopted by the master user
+            assert project.background.owner_id == project.owner_id
             assert project.month_name_color == {"c": 100, "m": 0, "y": 0, "k": 0}  # from title_color
             assert project.day_number_color == project.day_name_color == project.week_number_color == {"c": 0, "m": 0, "y": 0, "k": 90}
             assert_print_ready(service.generate_pdf(project), 594, 841, mode="RGB")
@@ -385,12 +388,12 @@ def test_settings_autosave_returns_json(client):
 
 def test_project_list_has_delete(client):
     pid = _create(client, name="Doomed", layout="columns")["id"]
-    page = client.get("/").text
+    page = client.get("/projects").text
     assert f'action="/projects/{pid}/delete"' in page
     assert "<th>Layout</th>" in page and "Table style" in page and "<th>Background</th>" not in page
     assert 'href="/projects/new"' in page and 'name="name"' not in page  # creation moved to its own page
     r = client.post(f"/projects/{pid}/delete", follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert r.status_code == 303 and r.headers["location"] == "/projects"
     assert client.get(f"/api/projects/{pid}").status_code == 404
 
 
@@ -468,7 +471,7 @@ def test_logo_api_and_upload_page(client):
 
     # the logo counts as usage, so the file cannot be deleted from the library while attached
     assert client.delete(f"/api/backgrounds/{p['logo_asset_id']}").status_code == 409
-    assert "1 project(s)" in client.get("/").text
+    assert "1 project(s)" in client.get("/projects").text
 
     # position must be free: title left + year left leaves center/right; center is fine, left is not
     p["logo_align"] = "center"

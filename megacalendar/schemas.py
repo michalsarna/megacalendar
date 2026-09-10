@@ -74,6 +74,14 @@ DEFAULT_COLORS: dict[str, dict[str, dict | None]] = {
 
 
 @lru_cache(maxsize=1)
+def country_choices() -> list[str]:
+    """English country names (ISO 3166 territories only, no regions like 'World')."""
+    territories = Locale.parse("en").territories
+    names = [name for code, name in territories.items() if len(code) == 2 and code.isalpha() and code not in ("ZZ", "QO", "EU", "EZ", "UN")]
+    return sorted(set(names))
+
+
+@lru_cache(maxsize=1)
 def language_choices() -> list[tuple[str, str]]:
     """(locale id, display name) for every language Babel knows, without territory variants."""
     out = []
@@ -322,6 +330,94 @@ class ProjectRead(ProjectBase):
     created_at: datetime
     updated_at: datetime
     day_overrides: list[DayOverrideRead] = []
+
+
+# ---------------------------------------------------------------- users & profile
+
+class AddressIn(BaseModel):
+    label: str | None = Field(default=None, max_length=100)
+    recipient: str = Field(min_length=1, max_length=200)
+    street: str = Field(min_length=1, max_length=200)
+    postal_code: str = Field(min_length=1, max_length=20)
+    city: str = Field(min_length=1, max_length=100)
+    country: str = Field(min_length=1, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    is_default: bool = False
+
+    @field_validator("label", "phone", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+
+class AddressRead(AddressIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+class ProfileUpdate(BaseModel):
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=200)
+
+    @field_validator("first_name", "last_name", "phone", "email", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v):
+        if v is not None and ("@" not in v or v.startswith("@") or v.endswith("@")):
+            raise ValueError("email address must contain a name and a domain")
+        return v
+
+
+MIN_PASSWORD = 8
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+
+
+class UserCreate(ProfileUpdate):
+    username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
+    password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+    project_limit: int | None = Field(default=1, ge=0)  # None = unlimited
+    # contact details are mandatory when an account is created
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    phone: str = Field(min_length=3, max_length=50)
+    email: str = Field(min_length=3, max_length=200)
+
+
+class UserUpdate(ProfileUpdate):
+    project_limit: int | None = Field(default=1, ge=0)
+    is_active: bool = True
+    password: str | None = Field(default=None, min_length=MIN_PASSWORD, max_length=200)  # set to reset
+
+
+class UserRead(ProfileUpdate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    is_master: bool
+    is_active: bool
+    project_limit: int | None
+    created_at: datetime
+    project_count: int = 0
+    addresses: list[AddressRead] = []
+
+
+class MeRead(UserRead):
+    csrf_token: str | None = None  # send as X-CSRF-Token with session-authenticated changes
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
 
 
 class Meta(BaseModel):

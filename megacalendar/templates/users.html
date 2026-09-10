@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Users · megacalendar{% endblock %}
+{% block content %}
+{% if saved %}<div class="ok">User {{ saved }}.</div>{% endif %}
+<div class="page-head">
+  <h2>Users</h2>
+  <a class="btn primary" href="/users/new">+ Create user</a>
+</div>
+<table class="users">
+  <thead><tr><th>User</th><th>Name</th><th>Contact</th><th>Projects</th><th>Limit</th><th>Active</th><th>New password</th><th></th></tr></thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <form method="post" action="/users/{{ u.id }}" id="user-{{ u.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="first_name" value="{{ u.first_name or '' }}">
+        <input type="hidden" name="last_name" value="{{ u.last_name or '' }}">
+        <input type="hidden" name="phone" value="{{ u.phone or '' }}">
+        <input type="hidden" name="email" value="{{ u.email or '' }}">
+      </form>
+      <td><strong>{{ u.username }}</strong>{% if u.is_master %} <span class="hint">master</span>{% endif %}</td>
+      <td>{{ u.display_name if (u.first_name or u.last_name) else "—" }}</td>
+      <td>{% if u.email %}<a href="mailto:{{ u.email }}">{{ u.email }}</a>{% endif %}{% if u.email and u.phone %}<br>{% endif %}{{ u.phone or "" }}{% if not u.email and not u.phone %}—{% endif %}</td>
+      <td>{{ counts.get(u.id, 0) }}</td>
+      <td>{% if u.is_master %}unlimited{% else %}<input form="user-{{ u.id }}" name="project_limit" type="number" min="0" value="{{ u.project_limit if u.project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
+      <td>{% if u.is_master %}yes{% else %}<input form="user-{{ u.id }}" type="checkbox" name="is_active" {% if u.is_active %}checked{% endif %}>{% endif %}</td>
+      <td><input form="user-{{ u.id }}" name="password" type="password" minlength="8" placeholder="leave blank to keep" autocomplete="new-password" style="width:9rem"></td>
+      <td class="row-actions">
+        <button form="user-{{ u.id }}" type="submit">Save</button>
+        {% if not u.is_master %}
+        <form method="post" action="/users/{{ u.id }}/delete" onsubmit="return confirm('Delete user “{{ u.username }}” with all their projects and files?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Delete</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="hint">The master user sets how many projects each user may have (blank = unlimited), deactivates accounts and resets passwords. Users edit their own name and contact details in their profile. Deleting a user removes their projects and uploaded files.</p>
+{% endblock %}

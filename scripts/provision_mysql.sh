@@ -31,3 +31,5 @@ FLUSH PRIVILEGES;
 SQL
 echo "MySQL: database '$DB_NAME' and user '$DB_USER' are ready."
 echo "Run the app with: DB_TYPE=mysql DB_HOST=$MYSQL_HOST DB_PORT=$MYSQL_TCP_PORT DB_USER=$DB_USER DB_PASSWORD=$DB_PASSWORD scripts/start.sh"
+echo "The application user 'master' (password 'master') is created automatically on first start;"
+echo "change it with: python scripts/manage_users.py set-password master"
