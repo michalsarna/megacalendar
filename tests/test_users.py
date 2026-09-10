@@ -1,5 +1,5 @@
 """Multi-user mode: login, isolation, project limits, master administration, profile and addresses."""
-from tests.conftest import MASTER, login
+from tests.conftest import MASTER, csrf_of, login
 
 
 def test_landing_and_login_flow(anon):
@@ -8,17 +8,20 @@ def test_landing_and_login_flow(anon):
     # protected pages redirect to the login page and come back afterwards
     r = anon.get("/projects", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login?next=/projects"
-    assert anon.post("/login", data={"username": "master", "password": "wrong"}).status_code == 401
-    r = anon.post("/login", data={"username": "master", "password": "master", "next": "/projects"}, follow_redirects=False)
+    token = csrf_of(anon)
+    assert anon.post("/login", data={"username": "master", "password": "wrong", "csrf_token": token}).status_code == 401
+    r = anon.post("/login", data={"username": "master", "password": "master", "next": "/projects", "csrf_token": token},
+                  follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/projects"
     page = anon.get("/projects").text
     assert "My projects" in page and "Log out" in page and "master" in page
     assert "still uses the default password" in page  # warning until the master password is changed
     assert anon.get("/login", follow_redirects=False).status_code == 303  # already logged in
     # open redirects are not followed
-    r = anon.post("/login", data={"username": "master", "password": "master", "next": "//evil.example"}, follow_redirects=False)
+    r = anon.post("/login", data={"username": "master", "password": "master", "next": "//evil.example", "csrf_token": csrf_of(anon)},
+                  follow_redirects=False)
     assert r.headers["location"] == "/projects"
-    anon.post("/logout", follow_redirects=False)
+    anon.post("/logout", data={"csrf_token": csrf_of(anon, "/projects")}, follow_redirects=False)
     assert anon.get("/projects", follow_redirects=False).status_code == 303
 
 
@@ -47,16 +50,20 @@ def test_api_requires_authentication_and_accepts_basic(anon):
     assert r.status_code == 200 and r.json()["is_master"] is True and r.json()["project_limit"] is None
     r = anon.post("/api/auth/login", json={"username": "master", "password": "master"})
     assert r.status_code == 200 and anon.get("/api/projects").status_code == 200  # session cookie set
-    assert anon.post("/api/auth/logout").status_code == 204 and anon.get("/api/projects").status_code == 401
+    token = r.json()["csrf_token"]
+    assert token and anon.get("/api/me").json()["csrf_token"] == token
+    assert anon.post("/api/auth/logout").status_code == 403  # session-authenticated change without the token
+    assert anon.post("/api/auth/logout", headers={"X-CSRF-Token": token}).status_code == 204
+    assert anon.get("/api/projects").status_code == 401
 
 
 def test_master_manages_users_and_limits(client, make_user):
-    r = client.post("/api/users", json={"username": "alice", "password": "secret1", "first_name": "Alice", "email": "a@x.io"})
+    r = client.post("/api/users", json={"username": "alice", "password": "secret12", "first_name": "Alice", "email": "a@x.io"})
     assert r.status_code == 201, r.text
     alice = r.json()
     assert alice["project_limit"] == 1 and alice["is_master"] is False and alice["is_active"] is True
-    assert client.post("/api/users", json={"username": "alice", "password": "secret1"}).status_code == 422  # taken
-    assert client.post("/api/users", json={"username": "bad name", "password": "secret1"}).status_code == 422
+    assert client.post("/api/users", json={"username": "alice", "password": "secret12"}).status_code == 422  # taken
+    assert client.post("/api/users", json={"username": "bad name", "password": "secret12"}).status_code == 422
     assert client.post("/api/users", json={"username": "bob", "password": "short"}).status_code == 422
     users = {u["username"]: u for u in client.get("/api/users").json()}
     assert "master" in users and "alice" in users
@@ -65,7 +72,7 @@ def test_master_manages_users_and_limits(client, make_user):
     bob = make_user("bob", "bobpass1", project_limit=2, last_name="Builder")
     # a normal user cannot administer users
     assert bob.get("/api/users").status_code == 403 and bob.get("/users", follow_redirects=False).status_code == 403
-    assert bob.post("/api/users", json={"username": "eve", "password": "secret1"}).status_code == 403
+    assert bob.post("/api/users", json={"username": "eve", "password": "secret12"}).status_code == 403
     # project limit: bob may create 2, the third is refused (API 403, UI message)
     for name in ("one", "two"):
         assert bob.post("/api/projects", json={"name": name, "year": 2027}).status_code == 201
@@ -141,7 +148,7 @@ def test_profile_password_and_addresses(make_user):
     from megacalendar.main import app
 
     with TestClient(app) as fresh:
-        assert fresh.post("/login", data={"username": "carol", "password": "carolpw1"}).status_code == 401
+        assert fresh.post("/login", data={"username": "carol", "password": "carolpw1", "csrf_token": csrf_of(fresh)}).status_code == 401
         login(fresh, "carol", "newpass99")
 
 
@@ -156,7 +163,7 @@ def test_deactivate_and_delete_user(client, make_user):
     from megacalendar.main import app
 
     with TestClient(app) as fresh:
-        assert fresh.post("/login", data={"username": "dave", "password": "davepw12"}).status_code == 401
+        assert fresh.post("/login", data={"username": "dave", "password": "davepw12", "csrf_token": csrf_of(fresh)}).status_code == 401
     # master cannot be deleted or deactivated; deleting dave removes his project
     master_id = client.get("/api/me").json()["id"]
     assert client.delete(f"/api/users/{master_id}").status_code == 409
@@ -176,3 +183,57 @@ def test_deactivate_and_delete_user(client, make_user):
     assert r.status_code == 303 and client.get(f"/api/users/{erin['id']}").json()["project_limit"] is None
     with TestClient(app) as fresh:
         login(fresh, "erin", "newerin1")
+
+
+def test_csrf_protection(anon, client):
+    # a logged-in browser session cannot be driven by a cross-site form post without the token
+    r = client.post("/api/projects", json={"name": "x", "year": 2027}, headers={"X-CSRF-Token": "wrong"})
+    assert r.status_code == 403 and "CSRF" in r.text
+    token = client.headers.pop("X-CSRF-Token")
+    try:
+        assert client.post("/api/projects", json={"name": "x", "year": 2027}).status_code == 403
+        assert client.post("/projects", data={"name": "x", "year": "2027"}).status_code == 403
+        assert client.post("/backgrounds", files={"file": ("a.svg", b"<svg/>", "image/svg+xml")}).status_code == 403
+        # the form field works as well as the header
+        assert client.post("/projects", data={"name": "x", "year": "2027", "csrf_token": token}, follow_redirects=False).status_code == 303
+    finally:
+        client.headers["X-CSRF-Token"] = token
+    # HTTP Basic carries no ambient credentials, so no token is needed
+    assert anon.post("/api/projects", json={"name": "basic", "year": 2027}, auth=MASTER).status_code == 201
+    # the login form itself needs the token of the visitor's session
+    assert anon.post("/login", data={"username": "master", "password": "master"}).status_code == 403
+    # every rendered POST form carries the hidden field and the page exposes the meta tag
+    page = client.get("/projects").text
+    assert page.count('<form method="post"') == page.count('name="csrf_token"') and 'name="csrf-token"' in page
+    pid = client.get("/api/projects").json()[0]["id"]
+    page = client.get(f"/projects/{pid}").text
+    assert page.count('<form method="post"') == page.count('name="csrf_token"') and "'X-CSRF-Token': csrf" in page
+
+
+def test_login_throttling(anon):
+    from megacalendar.security import login_throttle
+
+    login_throttle._failures.clear()
+    token = csrf_of(anon)
+    for _ in range(10):
+        assert anon.post("/login", data={"username": "master", "password": "nope", "csrf_token": token}).status_code == 401
+    r = anon.post("/login", data={"username": "master", "password": "master", "csrf_token": token})
+    assert r.status_code == 429 and "Retry-After" in r.headers
+    assert anon.post("/api/auth/login", json={"username": "master", "password": "master"}).status_code == 429
+    login_throttle._failures.clear()
+    assert anon.post("/api/auth/login", json={"username": "master", "password": "master"}).status_code == 200
+
+
+def test_security_headers_and_password_policy(anon, client):
+    r = anon.get("/")
+    assert r.headers["X-Frame-Options"] == "DENY" and r.headers["X-Content-Type-Options"] == "nosniff"
+    assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
+    assert "Content-Security-Policy" not in client.get("/docs").headers  # Swagger UI needs its CDN
+    assert client.post("/api/users", json={"username": "weak", "password": "1234567"}).status_code == 422
+    assert client.post("/api/me/password", json={"current_password": "master", "new_password": "short7!"}).status_code == 422
+
+
+def test_svg_with_entities_is_rejected(client):
+    bomb = b'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;">]><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><title>&b;</title></svg>'
+    r = client.post("/api/backgrounds", files={"file": ("bomb.svg", bomb, "image/svg+xml")})
+    assert r.status_code == 422 and "entity" in r.text

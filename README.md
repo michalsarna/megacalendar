@@ -97,6 +97,22 @@ The script uses the same `DB_*` / `DATABASE_URL` settings as the application. Se
 `MEGACALENDAR_SECRET_KEY` to pin the session-cookie secret (otherwise one is generated into the data
 directory). Deleting a user removes their projects and uploaded files.
 
+### Security notes
+
+- Passwords are stored as PBKDF2-SHA256 hashes (600k iterations); minimum length 8 (the bootstrap
+  `master` / `master` account is the exception and is flagged in the UI until changed).
+- Sessions are signed cookies (`SameSite=Lax`, 14 days). Set `MEGACALENDAR_HTTPS=1` behind TLS so the
+  cookie is marked `Secure`, and `MEGACALENDAR_SECRET_KEY` to pin the signing secret.
+- CSRF: every state-changing request made with the session cookie must carry the session's token,
+  either as the hidden `csrf_token` form field (all HTML forms) or the `X-CSRF-Token` header (the
+  editor's autosave). API clients logging in via `POST /api/auth/login` receive the token in the
+  response (`csrf_token`, also on `GET /api/me`); clients using HTTP Basic need none.
+- Login attempts are throttled: 10 failures per client address and username lock that pair for 15 min.
+- Responses carry `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, a `Referrer-Policy` and a
+  Content-Security-Policy (inline scripts/styles allowed for the editor; `/docs` is exempt).
+- Uploaded SVGs with DTD/entity declarations are rejected; uploads are size-limited and stored under
+  random names; user files are never served back to browsers (only rendered into PDFs).
+
 ### Provisioning a database (default user/password: admin / admin)
 
 Both scripts are idempotent and accept `[DB_NAME] [DB_USER] [DB_PASSWORD]` (defaults `megacalendar admin admin`).

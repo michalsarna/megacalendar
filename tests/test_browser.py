@@ -67,7 +67,7 @@ def test_autosave_in_a_real_browser_with_private_holidays(server):
                                                   "title": "Team", "show_year": True, "show_legend": True})["id"]
             # the page script used to crash when a private holiday row was present
             _put(server, f"/api/projects/{pid}/days/2027-03-15", {"color": "#00ff00", "note": "Kick-off", "day_number_color": "#ffffff"})
-            page = browser.new_context().new_page()
+            page = browser.new_context(bypass_csp=True).new_page()  # Playwright evaluates strings; the app CSP forbids eval
             page.goto(f"{server}/login")
             page.fill("input[name=username]", "master")
             page.fill("input[name=password]", "master")

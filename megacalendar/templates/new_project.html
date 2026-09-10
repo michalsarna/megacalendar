@@ -3,7 +3,7 @@
 {% block content %}
 {% set v = values or {} %}
 <h2>New project</h2>
-<form method="post" action="/projects">
+<form method="post" action="/projects"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
       <label>Name <input name="name" required maxlength="200" placeholder="Office wall {{ next_year }}" value="{{ v.get('name', '') }}" autofocus></label>

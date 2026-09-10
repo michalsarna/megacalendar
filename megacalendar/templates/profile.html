@@ -3,7 +3,7 @@
 {% block content %}
 {% if saved %}<div class="ok">Saved ({{ saved }}).</div>{% endif %}
 <h2>Profile of {{ user.username }}</h2>
-<form method="post" action="/profile">
+<form method="post" action="/profile"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
       <label>Name <input name="first_name" maxlength="100" value="{{ user.first_name or '' }}"></label>
@@ -17,12 +17,12 @@
 </form>
 
 <h2 id="password">Password</h2>
-<form method="post" action="/profile/password">
+<form method="post" action="/profile/password"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
       <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
-      <label>New password <input name="new_password" type="password" required minlength="6" autocomplete="new-password"></label>
-      <label>Repeat new password <input name="confirm_password" type="password" required minlength="6" autocomplete="new-password"></label>
+      <label>New password <input name="new_password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label>Repeat new password <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></label>
       <button type="submit">Change password</button>
     </div>
   </fieldset>
@@ -45,7 +45,7 @@
   <label class="inline"><input type="checkbox" name="is_default" {% if a and a.is_default %}checked{% endif %}> Default</label>
 {% endmacro %}
 {% for a in user.addresses %}
-<form method="post" action="/profile/addresses/{{ a.id }}">
+<form method="post" action="/profile/addresses/{{ a.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <legend>{{ a.label or ("Address " ~ loop.index) }}{% if a.is_default %} · default{% endif %}</legend>
     <div class="row">
@@ -55,11 +55,11 @@
     </div>
   </fieldset>
 </form>
-<form method="post" action="/profile/addresses/{{ a.id }}/delete" id="del-addr-{{ a.id }}" onsubmit="return confirm('Remove this address?')"></form>
+<form method="post" action="/profile/addresses/{{ a.id }}/delete" id="del-addr-{{ a.id }}" onsubmit="return confirm('Remove this address?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
 {% else %}
 <p class="hint">No delivery addresses yet.</p>
 {% endfor %}
-<form method="post" action="/profile/addresses">
+<form method="post" action="/profile/addresses"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <legend>Add an address</legend>
     <div class="row">

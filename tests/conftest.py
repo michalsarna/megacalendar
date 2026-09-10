@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 
 # Must run before any megacalendar import so the DB and uploads land in a temp dir.
@@ -13,9 +14,18 @@ from megacalendar.main import app  # noqa: E402
 MASTER = ("master", "master")
 
 
+def csrf_of(client: TestClient, path: str = "/login") -> str:
+    """Read the session's CSRF token from a rendered page (as a browser would)."""
+    page = client.get(path).text
+    return re.search(r'name="csrf-token" content="([^"]+)"', page).group(1)
+
+
 def login(client: TestClient, username: str, password: str) -> None:
-    r = client.post("/login", data={"username": username, "password": password}, follow_redirects=False)
+    """Log in through the HTML form and arm the client with the session's CSRF header."""
+    token = csrf_of(client)
+    r = client.post("/login", data={"username": username, "password": password, "csrf_token": token}, follow_redirects=False)
     assert r.status_code == 303, r.text
+    client.headers["X-CSRF-Token"] = csrf_of(client, "/projects")  # rotated at login
 
 
 @pytest.fixture
@@ -38,7 +48,7 @@ def make_user(client):
     """Create a user through the master API and return a fresh client logged in as that user."""
     created = []
 
-    def _make(username: str, password: str = "secret1", **fields):
+    def _make(username: str, password: str = "secret12", **fields):
         r = client.post("/api/users", json={"username": username, "password": password, **fields})
         assert r.status_code == 201, r.text
         c = TestClient(app)

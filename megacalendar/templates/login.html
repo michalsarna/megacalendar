@@ -2,7 +2,7 @@
 {% block title %}Log in · megacalendar{% endblock %}
 {% block content %}
 <h2>Log in</h2>
-<form method="post" action="/login" class="narrow">
+<form method="post" action="/login" class="narrow"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="next" value="{{ next or '' }}">
   <fieldset>
     <div class="row">

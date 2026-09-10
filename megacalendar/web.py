@@ -15,6 +15,7 @@ from starlette.datastructures import FormData
 
 from . import auth, config, service
 from .db import get_db
+from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
@@ -22,7 +23,7 @@ from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, 
 from .schemas import (BACKGROUND_MODES, AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate,
                       UserCreate, UserUpdate, country_choices, language_choices)
 
-router = APIRouter(include_in_schema=False)
+router = APIRouter(include_in_schema=False, dependencies=[Depends(verify_csrf)])
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 LAYOUT_LABELS = {"grid": "Month grids", "columns": "Table style"}
@@ -121,6 +122,7 @@ def _ctx(request: Request, **extra):
         extra.setdefault("default_password", auth.uses_default_password(user))
     return {
         "request": request,
+        "csrf_token": csrf_token(request),
         "page_sizes": PAGE_SIZES,
         "orientations": ORIENTATIONS,
         "background_modes": BACKGROUND_MODES,
@@ -196,11 +198,15 @@ def login_page(request: Request, db: Session = Depends(get_db)):
 @router.post("/login")
 async def login_submit(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
-    user = auth.authenticate(db, str(form.get("username", "")).strip(), str(form.get("password", "")))
+    username = str(form.get("username", "")).strip()
+    login_throttle.check(request, username)
+    user = auth.authenticate(db, username, str(form.get("password", "")))
     if user is None:
+        login_throttle.failure(request, username)
         return templates.TemplateResponse(
             request, "login.html", _ctx(request, next=form.get("next", ""), errors=["Wrong username or password."],
-                                       username=form.get("username", "")), status_code=401)
+                                       username=username), status_code=401)
+    login_throttle.success(request, username)
     auth.login(request, user)
     return RedirectResponse(_safe_next(str(form.get("next") or "")), status_code=303)
 

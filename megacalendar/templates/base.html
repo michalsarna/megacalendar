@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}megacalendar{% endblock %}</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="stylesheet" href="/static/style.css">
   {% block head %}{% endblock %}
 </head>
@@ -18,7 +19,7 @@
       {% if user.is_master %}<a href="/users">Users</a>{% endif %}
       <a href="/docs">API</a>
       <span class="who">{{ user.display_name }}{% if user.is_master %} · master{% endif %}</span>
-      <form method="post" action="/logout" class="inline"><button type="submit">Log out</button></form>
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Log out</button></form>
     {% else %}
       <a class="btn primary" href="/login">Log in</a>
     {% endif %}

@@ -19,7 +19,7 @@
       <td>{{ p.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
       <td class="row-actions">
         <a class="btn" href="/projects/{{ p.id }}/pdf">PDF</a>
-        <form method="post" action="/projects/{{ p.id }}/delete" onsubmit="return confirm('Delete project “{{ p.name }}”? This cannot be undone.')"><button class="danger" type="submit" title="Delete project">Delete</button></form>
+        <form method="post" action="/projects/{{ p.id }}/delete" onsubmit="return confirm('Delete project “{{ p.name }}”? This cannot be undone.')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit" title="Delete project">Delete</button></form>
       </td>
     </tr>
   {% endfor %}
@@ -30,7 +30,7 @@
 {% endif %}
 
 <h2 id="backgrounds">My background library</h2>
-<form method="post" action="/backgrounds" enctype="multipart/form-data">
+<form method="post" action="/backgrounds" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
       <label>Upload SVG, PNG or JPEG <input type="file" name="file" accept=".svg,.png,.jpg,.jpeg" required></label>
@@ -51,7 +51,7 @@
       <td>{{ "%.1f"|format(a.size_bytes / 1048576) }} MB</td>
       <td>{{ asset_usage.get(a.id, 0) }} project(s)</td>
       <td>{{ a.created_at.strftime("%Y-%m-%d") }}</td>
-      <td>{% if not asset_usage.get(a.id) %}<form method="post" action="/backgrounds/{{ a.id }}/delete" onsubmit="return confirm('Delete this file from the library?')"><button class="danger" type="submit">Delete</button></form>{% endif %}</td>
+      <td>{% if not asset_usage.get(a.id) %}<form method="post" action="/backgrounds/{{ a.id }}/delete" onsubmit="return confirm('Delete this file from the library?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Delete</button></form>{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>

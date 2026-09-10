@@ -156,6 +156,9 @@ def _inspect_background(path: Path) -> tuple[int | None, int | None]:
         if path.suffix.lower() == ".svg":
             from svglib.svglib import svg2rlg
 
+            head = path.read_bytes()[:256 * 1024].lower()
+            if b"<!entity" in head or b"<!doctype" in head and b"[" in head:
+                raise ValueError("SVG with a DTD / entity declarations is not accepted")
             if svg2rlg(str(path)) is None:
                 raise ValueError("SVG could not be parsed")
             return None, None

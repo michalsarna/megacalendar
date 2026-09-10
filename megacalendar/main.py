@@ -1,6 +1,7 @@
 """ASGI entry point: `uvicorn megacalendar.main:app --reload`."""
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
@@ -14,6 +15,7 @@ from . import api, web
 from .auth import LoginRequired, secret_key
 from .config import FONT_DIR
 from .db import init_db
+from .security import apply_security_headers
 
 
 @asynccontextmanager
@@ -24,7 +26,16 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="megacalendar", version="0.2.0", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=secret_key(), session_cookie="megacalendar_session",
-                   same_site="lax", max_age=14 * 24 * 3600)
+                   same_site="lax", max_age=14 * 24 * 3600,
+                   https_only=os.environ.get("MEGACALENDAR_HTTPS", "").lower() in ("1", "true", "yes"))
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    apply_security_headers(request.url.path, response.headers)
+    return response
+
 app.include_router(api.router)
 app.include_router(web.router)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")

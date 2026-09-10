@@ -374,21 +374,24 @@ class ProfileUpdate(BaseModel):
         return v
 
 
+MIN_PASSWORD = 8
+
+
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=6, max_length=200)
+    new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
 
 
 class UserCreate(ProfileUpdate):
     username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
-    password: str = Field(min_length=6, max_length=200)
+    password: str = Field(min_length=MIN_PASSWORD, max_length=200)
     project_limit: int | None = Field(default=1, ge=0)  # None = unlimited
 
 
 class UserUpdate(ProfileUpdate):
     project_limit: int | None = Field(default=1, ge=0)
     is_active: bool = True
-    password: str | None = Field(default=None, min_length=6, max_length=200)  # set to reset
+    password: str | None = Field(default=None, min_length=MIN_PASSWORD, max_length=200)  # set to reset
 
 
 class UserRead(ProfileUpdate):
@@ -401,6 +404,10 @@ class UserRead(ProfileUpdate):
     created_at: datetime
     project_count: int = 0
     addresses: list[AddressRead] = []
+
+
+class MeRead(UserRead):
+    csrf_token: str | None = None  # send as X-CSRF-Token with session-authenticated changes
 
 
 class LoginIn(BaseModel):

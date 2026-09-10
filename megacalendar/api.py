@@ -9,15 +9,16 @@ from sqlalchemy.orm import Session
 
 from . import auth, config, service
 from .db import get_db
+from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
 from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, DayOverrideIn, DayOverrideRead, LoginIn,
-                      Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, UserCreate, UserRead,
-                      UserUpdate)
+                      MeRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, UserCreate,
+                      UserRead, UserUpdate)
 
-router = APIRouter(prefix="/api", tags=["api"])
+router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(verify_csrf)])
 CurrentUser = Depends(auth.current_user_api)
 Master = Depends(auth.master_required_api)
 
@@ -35,15 +36,26 @@ def _user_read(db: Session, user: User) -> UserRead:
     return data
 
 
+def _me_read(db: Session, user: User, request: Request) -> MeRead:
+    """Profile plus the CSRF token that session-authenticated clients must send with changes."""
+    data = MeRead.model_validate(user)
+    data.project_count = service.project_count(db, user)
+    data.csrf_token = csrf_token(request) if "session" in request.scope else None
+    return data
+
+
 # ---------------------------------------------------------------- session
 
-@router.post("/auth/login", response_model=UserRead)
+@router.post("/auth/login", response_model=MeRead)
 def api_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
+    login_throttle.check(request, data.username)
     user = auth.authenticate(db, data.username, data.password)
     if user is None:
+        login_throttle.failure(request, data.username)
         raise HTTPException(401, "wrong username or password")
+    login_throttle.success(request, data.username)
     auth.login(request, user)
-    return _user_read(db, user)
+    return _me_read(db, user, request)
 
 
 @router.post("/auth/logout", status_code=204)
@@ -54,9 +66,9 @@ def api_logout(request: Request):
 
 # ---------------------------------------------------------------- me: profile, password, addresses
 
-@router.get("/me", response_model=UserRead)
-def me(user: User = CurrentUser, db: Session = Depends(get_db)):
-    return _user_read(db, user)
+@router.get("/me", response_model=MeRead)
+def me(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
+    return _me_read(db, user, request)
 
 
 @router.put("/me", response_model=UserRead)
