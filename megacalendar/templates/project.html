@@ -276,7 +276,7 @@
 <div class="actions bottom">
   <button class="primary" type="submit" form="settings">Save project</button>
   <span id="save-status">Changes are saved automatically.</span>
-  <a class="btn" href="/projects/{{ project.id }}/pdf">Download print PDF</a>
+  <a class="btn" href="/projects/{{ project.id }}/pdf">Download PDF</a>
   <a class="btn" href="/projects/{{ project.id }}/png">Download PNG</a>
   <a class="btn" href="/projects/{{ project.id }}/tiff">Download TIFF</a>
   <form class="inline" method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Delete project “{{ project.name }}”? This cannot be undone.')" style="margin-left:auto">
