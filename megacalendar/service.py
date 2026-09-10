@@ -278,6 +278,7 @@ def spec_from_project(project: Project) -> CalendarSpec:
         month_names_uppercase=project.month_names_uppercase,
         day_names_uppercase=project.day_names_uppercase,
         day_number_scale=project.day_number_scale,
+        day_number_align=project.day_number_align or "center",
         title_font=project.title_font, title_scale=project.title_scale,
         year_font=project.year_font, year_scale=project.year_scale,
         month_name_font=project.month_name_font, month_name_scale=project.month_name_scale,
