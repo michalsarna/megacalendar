@@ -40,6 +40,8 @@ class Frame:
     title_h: float
     gutter_x: float
     gutter_y: float
+    band_gap: float  # space between the title band / legend and the month blocks
+    footer_h: float  # strip at the very bottom for the watermark
     legend_h: float = 0.0  # reserved at the bottom (0 = no legend)
 
     @property
@@ -52,11 +54,11 @@ class Frame:
 
     @property
     def grid_top(self) -> float:
-        return self.page_h - self.margin - self.title_h - self.gutter_y
+        return self.page_h - self.margin - self.title_h - self.band_gap
 
     @property
     def grid_bottom(self) -> float:
-        return self.margin + (self.legend_h + self.gutter_y if self.legend_h else 0.0)
+        return self.margin + self.footer_h + (self.legend_h + self.band_gap if self.legend_h else 0.0)
 
     @property
     def grid_h(self) -> float:
@@ -75,7 +77,7 @@ def max_month_gap_mm(spec: CalendarSpec) -> float:
     page_w, page_h = get_page_size(spec.page_size).points(spec.orientation)
     margin = spec.margin_mm * mm
     content_w, content_h = page_w - 2 * margin, page_h - 2 * margin
-    grid_h = content_h - content_h * 0.07 - content_h * 0.025  # minus title band and its gutter
+    grid_h = content_h - content_h * 0.07 - content_h * 0.025 - content_h * 0.012  # minus title band, gap, footer
     cols, rows = blocks_for(spec)
     limits = [content_w * MAX_GAP_SHARE / (cols - 1)]
     if rows > 1:
@@ -90,14 +92,31 @@ def compute_frame(spec: CalendarSpec) -> Frame:
     margin = spec.margin_mm * mm
     content_w, content_h = page_w - 2 * margin, page_h - 2 * margin
     if spec.month_gap_mm is None:
-        gutter_x = content_w * (0.03 if spec.layout == "grid" else 0.012)
-        gutter_y = content_h * 0.025
+        # automatic: month grids breathe, table-style columns touch each other
+        gutter_x = content_w * 0.03 if spec.layout == "grid" else 0.0
+        gutter_y = content_h * 0.025 if spec.layout == "grid" else 0.0
     else:
         limit = max_month_gap_mm(spec)
         if spec.month_gap_mm < 0 or spec.month_gap_mm > limit:
             raise ValueError(f"month gap must be between 0 and {limit} mm for this sheet and layout")
         gutter_x = gutter_y = spec.month_gap_mm * mm
-    return Frame(page_w, page_h, margin, title_h=content_h * 0.07, gutter_x=gutter_x, gutter_y=gutter_y)
+    return Frame(page_w, page_h, margin, title_h=content_h * 0.07, gutter_x=gutter_x, gutter_y=gutter_y,
+                 band_gap=content_h * 0.025, footer_h=content_h * 0.012)
+
+
+WATERMARK = "Made with megacalendar"
+
+
+def _draw_watermark(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontSet) -> None:
+    """Small light-grey credit in the bottom-right corner, inside the printable area."""
+    from .spec import CMYK, RGB
+
+    grey = CMYK(0, 0, 0, 35) if spec.color_mode == "CMYK" else RGB(170, 170, 170)
+    size = frame.footer_h * 0.6
+    c.setFillColor(spec.paint(grey))
+    c.setFont(fonts.base.regular, size)
+    c.drawRightString(frame.page_w - frame.margin, baseline_for_vcenter(fonts.base.regular, size, frame.margin, frame.footer_h),
+                      WATERMARK)
 
 
 # ---------------------------------------------------------------- fonts per element
@@ -428,7 +447,7 @@ def plan_legend(spec: CalendarSpec, frame: Frame, fonts: FontSet, classifier: Da
 
 def _draw_legend(c: Canvas, spec: CalendarSpec, frame: Frame, fonts: FontSet, plan: LegendPlan) -> None:
     gap_between = plan.row_h * 1.2
-    top = frame.margin + plan.height
+    top = frame.margin + frame.footer_h + plan.height
     for r, row in enumerate(plan.rows):
         y = top - (r + 1) * plan.row_h
         x = frame.margin
@@ -495,6 +514,7 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
     draw(c, spec, frame, fonts, classifier, month_names, day_names)
     if legend is not None:
         _draw_legend(c, spec, frame, fonts, legend)
+    _draw_watermark(c, spec, frame, fonts)
 
     c.showPage()
     c.save()

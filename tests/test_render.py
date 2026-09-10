@@ -170,8 +170,8 @@ def test_columns_layout_draws_every_day_once():
 
     spec = CalendarSpec(year=2027, layout="columns", weekend_color=None, holiday_color=None, month_border_color=None)
     text = PdfReader(io.BytesIO(render(spec))).pages[0].get_contents().get_data()
-    # 365 day rows + 12 month names + 365 day names + title = 743 text objects
-    assert text.count(b" Tj") == 365 + 12 + 365 + 1
+    # 365 day rows + 12 month names + 365 day names + title + watermark = 744 text objects
+    assert text.count(b" Tj") == 365 + 12 + 365 + 1 + 1
 
 
 def test_title_alignment_moves_the_title():
@@ -231,7 +231,7 @@ def test_day_number_scale_changes_font_size_in_both_layouts():
 
 def test_table_day_names_can_be_hidden():
     spec = CalendarSpec(year=2027, layout="columns", weekend_color=None, holiday_color=None, table_day_names=False)
-    assert _content(spec).count(b" Tj") == 365 + 12 + 1  # days + month names + title, no day names
+    assert _content(spec).count(b" Tj") == 365 + 12 + 1 + 1  # days + month names + title + watermark, no day names
 
 
 def test_table_day_borders_are_stroked_after_fills():
@@ -359,6 +359,33 @@ def test_logo_scales_to_title_band_and_respects_positions(tmp_path: Path):
     render(CalendarSpec(year=2027, title="Team", show_year=True, title_align="left", year_align="right", logo_path=svg, logo_align="center"))
     with pytest.raises(ValueError, match="unknown logo alignment"):
         render(CalendarSpec(year=2027, logo_path=svg, logo_align="top"))
+
+
+def test_watermark_bottom_right_in_light_grey():
+    from megacalendar.pdf.render import compute_frame
+
+    for mode, colour_op in (("RGB", b".666667 .666667 .666667 rg"), ("CMYK", b"0 0 0 .35 k")):
+        spec = CalendarSpec(year=2027, color_mode=mode)
+        content = _content(spec)
+        m = re.search(colour_op + rb"\nBT 1 0 0 1 ([\d.]+) ([\d.]+) Tm /F\d\+0 ([\d.]+) Tf [^\n]*\(Made with megacalendar\) Tj", content)
+        assert m, mode
+        frame = compute_frame(spec)
+        x, y, size = float(m.group(1)), float(m.group(2)), float(m.group(3))
+        assert y < frame.margin + frame.footer_h and x > frame.page_w / 2  # bottom-right strip, inside the margins
+        assert size < frame.footer_h  # small: fits the footer strip
+
+
+def test_table_style_columns_touch_by_default():
+    from megacalendar.pdf.render import compute_frame
+
+    frame = compute_frame(CalendarSpec(year=2027, layout="columns"))
+    assert frame.gutter_x == 0 and frame.gutter_y == 0
+    assert compute_frame(CalendarSpec(year=2027, layout="grid")).gutter_x > 0
+    xs = sorted({round(float(m), 2) for m in re.findall(rb"\nn ([\d.]+) [\d.]+ [\d.]+ [\d.]+ re S",
+                 _content(CalendarSpec(year=2027, layout="columns", orientation="landscape", color_mode="CMYK",
+                                       month_border_color=CMYK(0, 0, 0, 100))))})
+    widths = {round(b - a, 1) for a, b in zip(xs, xs[1:])}
+    assert len(widths) == 1  # equal steps: column edge to next column edge, no gap
 
 
 def test_rgb_to_cmyk_rounds_to_whole_percent():

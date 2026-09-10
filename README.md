@@ -10,10 +10,12 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
   A built-in **master** user (password `master`, change it after the first login) creates users, sets
   how many projects each may have (default 1, blank = unlimited), deactivates accounts and resets
   passwords. Users keep a profile (name, surname, phone, email) and any number of delivery addresses.
+  Name, surname, phone and email are required when an account is created.
   The landing page is public; everything else needs a login (session cookie, or HTTP Basic for the API).
 
 - Sheet sizes A0 to A5, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
-- Adjustable space between months (validated against the sheet so blocks never overlap), title with
+- Adjustable space between months (validated against the sheet so blocks never overlap; table-style
+  columns touch by default), a small “Made with megacalendar” credit bottom right, title with
   optional year (stacked when both share an alignment, side by side otherwise).
 - Two layouts: month grids (3×4 portrait, 4×3 landscape) or table style, one column per month with
   days as rows (portrait: two bands of six months, landscape: twelve columns). Table style can hide
@@ -89,7 +91,8 @@ The first start creates the application user **master / master**, which can add 
 
 ```bash
 python scripts/manage_users.py set-password master
-python scripts/manage_users.py create alice --limit 3 --email alice@example.com   # asks for a password
+python scripts/manage_users.py create alice --limit 3 --first-name Alice --last-name Liddell \
+    --phone +48600000000 --email alice@example.com        # asks for a password
 python scripts/manage_users.py list
 ```
 

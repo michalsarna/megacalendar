@@ -5,6 +5,9 @@ from tests.conftest import MASTER, csrf_of, login
 def test_landing_and_login_flow(anon):
     page = anon.get("/").text
     assert 'href="/login"' in page and "Print-ready wall calendars" in page and "Log out" not in page
+    assert "megacalendar by DeerTeam · Copyright 2026" in page
+    login_page = anon.get("/login").text
+    assert 'class="login-box"' in login_page and 'href="/login"' not in login_page  # no Log in button on the login page itself
     # protected pages redirect to the login page and come back afterwards
     r = anon.get("/projects", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login?next=/projects"
@@ -14,7 +17,8 @@ def test_landing_and_login_flow(anon):
                   follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/projects"
     page = anon.get("/projects").text
-    assert "My projects" in page and "Log out" in page and "master" in page
+    assert "My projects" in page and 'class="logout"' in page and "master" in page
+    assert "megacalendar by DeerTeam · Copyright 2026" in page
     assert "still uses the default password" in page  # warning until the master password is changed
     assert anon.get("/login", follow_redirects=False).status_code == 303  # already logged in
     # open redirects are not followed
@@ -58,13 +62,18 @@ def test_api_requires_authentication_and_accepts_basic(anon):
 
 
 def test_master_manages_users_and_limits(client, make_user):
-    r = client.post("/api/users", json={"username": "alice", "password": "secret12", "first_name": "Alice", "email": "a@x.io"})
+    contact = {"first_name": "Alice", "last_name": "Liddell", "phone": "+48 600 000 001", "email": "a@x.io"}
+    r = client.post("/api/users", json={"username": "alice", "password": "secret12", **contact})
     assert r.status_code == 201, r.text
     alice = r.json()
     assert alice["project_limit"] == 1 and alice["is_master"] is False and alice["is_active"] is True
-    assert client.post("/api/users", json={"username": "alice", "password": "secret12"}).status_code == 422  # taken
-    assert client.post("/api/users", json={"username": "bad name", "password": "secret12"}).status_code == 422
-    assert client.post("/api/users", json={"username": "bob", "password": "short"}).status_code == 422
+    assert client.post("/api/users", json={"username": "alice", "password": "secret12", **contact}).status_code == 422  # taken
+    assert client.post("/api/users", json={"username": "bad name", "password": "secret12", **contact}).status_code == 422
+    assert client.post("/api/users", json={"username": "bob", "password": "short", **contact}).status_code == 422
+    # name, surname, phone and email are mandatory on creation
+    for missing in contact:
+        body = {"username": "incomplete", "password": "secret12", **{k: v for k, v in contact.items() if k != missing}}
+        assert client.post("/api/users", json=body).status_code == 422, missing
     users = {u["username"]: u for u in client.get("/api/users").json()}
     assert "master" in users and "alice" in users
 
@@ -172,11 +181,18 @@ def test_deactivate_and_delete_user(client, make_user):
     assert client.get(f"/api/users/{dave_id}").status_code == 404
     # the project is gone with the user (master could never see it anyway)
     assert client.get(f"/api/projects/{pid}").status_code == 404
-    # web admin page renders and can create a user through the form
+    # list view shows contact details read-only and links to the separate create page
     page = client.get("/users").text
-    assert "Add a user" in page and "master" in page
-    r = client.post("/users", data={"username": "erin", "password": "erinpw12", "project_limit": "3", "first_name": "Erin"}, follow_redirects=False)
+    assert 'href="/users/new"' in page and "master" in page and 'name="first_name" value=' not in page.split("<tbody>")[1].replace('type="hidden" name="first_name"', "")
+    assert "Add a user" not in page
+    assert "Create user" in client.get("/users/new").text
+    r = client.post("/users", data={"username": "erin", "password": "erinpw12", "project_limit": "3", "first_name": "Erin"})
+    assert r.status_code == 422 and 'name="last_name"' in r.text  # incomplete contact: form re-rendered
+    r = client.post("/users", data={"username": "erin", "password": "erinpw12", "project_limit": "3", "first_name": "Erin",
+                                     "last_name": "Evans", "phone": "123456", "email": "erin@example.com"}, follow_redirects=False)
     assert r.status_code == 303
+    page = client.get("/users").text
+    assert "Erin Evans" in page and "erin@example.com" in page
     erin = next(u for u in client.get("/api/users").json() if u["username"] == "erin")
     assert erin["project_limit"] == 3 and erin["first_name"] == "Erin"
     r = client.post(f"/users/{erin['id']}", data={"project_limit": "", "is_active": "on", "password": "newerin1"}, follow_redirects=False)

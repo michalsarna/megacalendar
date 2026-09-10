@@ -48,7 +48,7 @@ def test_per_element_fonts_and_scales_render():
 
     assert used("Oswald", bold=True) and used("Montserrat", bold=True)
     assert used("Lora") and used("Roboto") and used("NotoSans") and used("Merriweather")
-    assert not any(n.startswith("DejaVu") for n in names)  # every element has its own font; the default is unused
+    assert any(n.startswith("DejaVu") for n in names)  # the project font is still used, only for the watermark
 
     def sizes(spec):
         b = io.BytesIO()

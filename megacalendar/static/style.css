@@ -13,6 +13,14 @@ header a { color: var(--muted); text-decoration: none; }
 .features { padding-left: 1.2rem; }
 .features li { margin: .4rem 0; }
 form.narrow { max-width: 520px; }
+.login-box { max-width: 380px; margin: 4rem auto; }
+.login-box h2 { text-align: center; border: 0; }
+.login-box label { margin-top: .4rem; }
+.login-box input { width: 100%; }
+button.logout { background: #fde8e8; border-color: #e5a3a3; color: #8a1c1c; }
+button.logout:hover { background: #f9d3d3; }
+.site-footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem 1rem 1.5rem; border-top: 1px solid var(--line); margin-top: 2rem; background: #fff; }
+main { min-height: calc(100vh - 12rem); }
 table.users td input { min-width: 0; }
 main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1.5rem; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.6rem; }

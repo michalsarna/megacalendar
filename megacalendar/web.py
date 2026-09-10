@@ -192,7 +192,7 @@ def landing(request: Request, db: Session = Depends(get_db)):
 def login_page(request: Request, db: Session = Depends(get_db)):
     if auth.user_from_request(request, db) is not None:
         return RedirectResponse(_safe_next(request.query_params.get("next")), status_code=303)
-    return templates.TemplateResponse(request, "login.html", _ctx(request, next=request.query_params.get("next", "")))
+    return templates.TemplateResponse(request, "login.html", _ctx(request, next=request.query_params.get("next", ""), on_login_page=True))
 
 
 @router.post("/login")
@@ -205,7 +205,7 @@ async def login_submit(request: Request, db: Session = Depends(get_db)):
         login_throttle.failure(request, username)
         return templates.TemplateResponse(
             request, "login.html", _ctx(request, next=form.get("next", ""), errors=["Wrong username or password."],
-                                       username=username), status_code=401)
+                                       username=username, on_login_page=True), status_code=401)
     login_throttle.success(request, username)
     auth.login(request, user)
     return RedirectResponse(_safe_next(str(form.get("next") or "")), status_code=303)
@@ -488,6 +488,11 @@ def _limit(form: FormData) -> int | None:
     return None if raw == "" else int(raw)
 
 
+@router.get("/users/new", response_class=HTMLResponse)
+def user_new(request: Request, user: User = Master, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request, "user_new.html", _ctx(request, db=db, user=user))
+
+
 @router.post("/users")
 async def user_create(request: Request, user: User = Master, db: Session = Depends(get_db)):
     form = await request.form()
@@ -497,7 +502,7 @@ async def user_create(request: Request, user: User = Master, db: Session = Depen
         service.create_user(db, data)
     except (ValidationError, ValueError) as exc:
         errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
-        return templates.TemplateResponse(request, "users.html", _users_ctx(request, db, user, errors=errors, values=dict(form)),
+        return templates.TemplateResponse(request, "user_new.html", _ctx(request, db=db, user=user, errors=errors, values=dict(form)),
                                           status_code=422)
     return RedirectResponse("/users?saved=created", status_code=303)
 

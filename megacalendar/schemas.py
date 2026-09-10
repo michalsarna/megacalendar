@@ -386,6 +386,11 @@ class UserCreate(ProfileUpdate):
     username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
     password: str = Field(min_length=MIN_PASSWORD, max_length=200)
     project_limit: int | None = Field(default=1, ge=0)  # None = unlimited
+    # contact details are mandatory when an account is created
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    phone: str = Field(min_length=3, max_length=50)
+    email: str = Field(min_length=3, max_length=200)
 
 
 class UserUpdate(ProfileUpdate):

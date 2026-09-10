@@ -2,7 +2,8 @@
 """Manage megacalendar users from the command line (uses the same database settings as the app).
 
     python scripts/manage_users.py list
-    python scripts/manage_users.py create alice --password secret1 --limit 3 --first-name Alice --email a@example.com
+    python scripts/manage_users.py create alice --password secret123 --limit 3 \\
+        --first-name Alice --last-name Liddell --phone +48600000000 --email a@example.com
     python scripts/manage_users.py set-password master --password 'new-strong-password'
     python scripts/manage_users.py set-limit alice --limit 10          (omit --limit for unlimited)
     python scripts/manage_users.py deactivate alice | activate alice
@@ -42,10 +43,10 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("username")
     c.add_argument("--password")
     c.add_argument("--limit", type=int, default=1, help="max projects (default 1)")
-    c.add_argument("--first-name")
-    c.add_argument("--last-name")
-    c.add_argument("--phone")
-    c.add_argument("--email")
+    c.add_argument("--first-name", required=True)
+    c.add_argument("--last-name", required=True)
+    c.add_argument("--phone", required=True)
+    c.add_argument("--email", required=True)
     sp = sub.add_parser("set-password")
     sp.add_argument("username")
     sp.add_argument("--password")

@@ -1,38 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Users · megacalendar{% endblock %}
 {% block content %}
-{% set v = values or {} %}
 {% if saved %}<div class="ok">User {{ saved }}.</div>{% endif %}
-<h2>Add a user</h2>
-<form method="post" action="/users"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <fieldset>
-    <div class="row">
-      <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}"></label>
-      <label>Password <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
-      <label>Project limit (blank = unlimited) <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
-    </div>
-    <div class="row" style="margin-top:.8rem">
-      <label>Name <input name="first_name" maxlength="100" value="{{ v.get('first_name', '') }}"></label>
-      <label>Surname <input name="last_name" maxlength="100" value="{{ v.get('last_name', '') }}"></label>
-      <label>Phone <input name="phone" maxlength="50" value="{{ v.get('phone', '') }}"></label>
-      <label>Email <input name="email" type="email" maxlength="200" value="{{ v.get('email', '') }}"></label>
-      <button class="primary" type="submit">Create user</button>
-    </div>
-  </fieldset>
-</form>
-
-<h2>Users</h2>
+<div class="page-head">
+  <h2>Users</h2>
+  <a class="btn primary" href="/users/new">+ Create user</a>
+</div>
 <table class="users">
   <thead><tr><th>User</th><th>Name</th><th>Contact</th><th>Projects</th><th>Limit</th><th>Active</th><th>New password</th><th></th></tr></thead>
   <tbody>
   {% for u in users %}
     <tr>
-      <form method="post" action="/users/{{ u.id }}" id="user-{{ u.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+      <form method="post" action="/users/{{ u.id }}" id="user-{{ u.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="first_name" value="{{ u.first_name or '' }}">
+        <input type="hidden" name="last_name" value="{{ u.last_name or '' }}">
+        <input type="hidden" name="phone" value="{{ u.phone or '' }}">
+        <input type="hidden" name="email" value="{{ u.email or '' }}">
+      </form>
       <td><strong>{{ u.username }}</strong>{% if u.is_master %} <span class="hint">master</span>{% endif %}</td>
-      <td><input form="user-{{ u.id }}" name="first_name" value="{{ u.first_name or '' }}" placeholder="Name" style="width:6.5rem">
-          <input form="user-{{ u.id }}" name="last_name" value="{{ u.last_name or '' }}" placeholder="Surname" style="width:7rem"></td>
-      <td><input form="user-{{ u.id }}" name="phone" value="{{ u.phone or '' }}" placeholder="Phone" style="width:7rem">
-          <input form="user-{{ u.id }}" name="email" type="email" value="{{ u.email or '' }}" placeholder="Email" style="width:10rem"></td>
+      <td>{{ u.display_name if (u.first_name or u.last_name) else "—" }}</td>
+      <td>{% if u.email %}<a href="mailto:{{ u.email }}">{{ u.email }}</a>{% endif %}{% if u.email and u.phone %}<br>{% endif %}{{ u.phone or "" }}{% if not u.email and not u.phone %}—{% endif %}</td>
       <td>{{ counts.get(u.id, 0) }}</td>
       <td>{% if u.is_master %}unlimited{% else %}<input form="user-{{ u.id }}" name="project_limit" type="number" min="0" value="{{ u.project_limit if u.project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
       <td>{% if u.is_master %}yes{% else %}<input form="user-{{ u.id }}" type="checkbox" name="is_active" {% if u.is_active %}checked{% endif %}>{% endif %}</td>
@@ -47,5 +34,5 @@
   {% endfor %}
   </tbody>
 </table>
-<p class="hint">The master user can add users, set how many projects each may have (blank = unlimited), deactivate accounts and reset passwords. Deleting a user removes their projects and uploaded files. Users never see each other's projects.</p>
+<p class="hint">The master user sets how many projects each user may have (blank = unlimited), deactivates accounts and resets passwords. Users edit their own name and contact details in their profile. Deleting a user removes their projects and uploaded files.</p>
 {% endblock %}

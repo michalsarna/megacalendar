@@ -19,8 +19,8 @@
       {% if user.is_master %}<a href="/users">Users</a>{% endif %}
       <a href="/docs">API</a>
       <span class="who">{{ user.display_name }}{% if user.is_master %} · master{% endif %}</span>
-      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Log out</button></form>
-    {% else %}
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">Log out</button></form>
+    {% elif not on_login_page %}
       <a class="btn primary" href="/login">Log in</a>
     {% endif %}
   </nav>
@@ -30,5 +30,6 @@
   {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
   {% block content %}{% endblock %}
 </main>
+<footer class="site-footer">megacalendar by DeerTeam · Copyright 2026</footer>
 </body>
 </html>

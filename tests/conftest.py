@@ -49,7 +49,9 @@ def make_user(client):
     created = []
 
     def _make(username: str, password: str = "secret12", **fields):
-        r = client.post("/api/users", json={"username": username, "password": password, **fields})
+        contact = {"first_name": username.title(), "last_name": "Tester", "phone": "+48 500 000 000",
+                   "email": f"{username}@example.com"}
+        r = client.post("/api/users", json={"username": username, "password": password, **contact, **fields})
         assert r.status_code == 201, r.text
         c = TestClient(app)
         c.__enter__()
