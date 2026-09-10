@@ -136,7 +136,9 @@ Environment variables:
 ## Fonts
 
 Drop `Family.ttf` (and optionally `Family-Bold.ttf`) into `assets/fonts/` and the family becomes
-selectable. DejaVu Sans ships by default (licence in `assets/fonts/LICENSE-DejaVu.txt`).
+selectable. Fourteen open-licence families are bundled (DejaVu Sans, Roboto, Open Sans, Lato, Montserrat,
+Source Sans 3, Noto Sans, Liberation Sans/Serif, GNU FreeSans/FreeSerif, Oswald, Lora, Merriweather); see
+`assets/fonts/README.md` for licences and `scripts/fetch_fonts.py` to refresh or add families.
 
 ## API sketch
 
