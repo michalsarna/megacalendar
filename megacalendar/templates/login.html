@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Log in · megacalendar{% endblock %}
+{% block content %}
+<h2>Log in</h2>
+<form method="post" action="/login" class="narrow">
+  <input type="hidden" name="next" value="{{ next or '' }}">
+  <fieldset>
+    <div class="row">
+      <label>Username <input name="username" value="{{ username or '' }}" required autofocus autocomplete="username"></label>
+      <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+    </div>
+  </fieldset>
+  <div class="actions"><button class="primary" type="submit">Log in</button></div>
+</form>
+{% endblock %}

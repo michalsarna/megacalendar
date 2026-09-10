@@ -1,9 +1,19 @@
 :root { --ink: #1a1a1a; --muted: #666; --line: #ddd; --accent: #b0002a; --bg: #fafafa; }
 * { box-sizing: border-box; }
 body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); margin: 0; }
-header { background: #fff; border-bottom: 1px solid var(--line); padding: .8rem 1.5rem; display: flex; align-items: baseline; gap: 1rem; }
+header { background: #fff; border-bottom: 1px solid var(--line); padding: .8rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
 header h1 { margin: 0; font-size: 1.2rem; }
 header a { color: var(--muted); text-decoration: none; }
+.nav { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
+.nav .who { color: var(--ink); font-weight: 600; }
+.nav form { margin: 0; }
+.hero { max-width: 760px; margin: 2rem auto; }
+.hero h2 { font-size: 1.6rem; border: 0; margin-bottom: .6rem; }
+.hero p { font-size: 1.05rem; color: #333; }
+.features { padding-left: 1.2rem; }
+.features li { margin: .4rem 0; }
+form.narrow { max-width: 520px; }
+table.users td input { min-width: 0; }
 main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1.5rem; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.6rem; }
 .page-head h2 { margin: 0; border: 0; padding: 0; }

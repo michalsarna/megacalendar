@@ -17,6 +17,7 @@ dependencies = [
     "numpy>=1.26",
     "holidays>=0.50",
     "babel>=2.15",
+    "itsdangerous>=2.1",
 ]
 
 [project.optional-dependencies]

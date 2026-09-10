@@ -324,6 +324,82 @@ class ProjectRead(ProjectBase):
     day_overrides: list[DayOverrideRead] = []
 
 
+# ---------------------------------------------------------------- users & profile
+
+class AddressIn(BaseModel):
+    label: str | None = Field(default=None, max_length=100)
+    recipient: str = Field(min_length=1, max_length=200)
+    street: str = Field(min_length=1, max_length=200)
+    postal_code: str = Field(min_length=1, max_length=20)
+    city: str = Field(min_length=1, max_length=100)
+    country: str = Field(min_length=1, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    is_default: bool = False
+
+    @field_validator("label", "phone", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+
+class AddressRead(AddressIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+class ProfileUpdate(BaseModel):
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=50)
+    email: str | None = Field(default=None, max_length=200)
+
+    @field_validator("first_name", "last_name", "phone", "email", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v):
+        if v is not None and ("@" not in v or v.startswith("@") or v.endswith("@")):
+            raise ValueError("email address must contain a name and a domain")
+        return v
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=200)
+
+
+class UserCreate(ProfileUpdate):
+    username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
+    password: str = Field(min_length=6, max_length=200)
+    project_limit: int | None = Field(default=1, ge=0)  # None = unlimited
+
+
+class UserUpdate(ProfileUpdate):
+    project_limit: int | None = Field(default=1, ge=0)
+    is_active: bool = True
+    password: str | None = Field(default=None, min_length=6, max_length=200)  # set to reset
+
+
+class UserRead(ProfileUpdate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    is_master: bool
+    is_active: bool
+    project_limit: int | None
+    created_at: datetime
+    project_count: int = 0
+    addresses: list[AddressRead] = []
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
 class Meta(BaseModel):
     page_sizes: dict[str, dict[str, float]]
     color_modes: list[str]

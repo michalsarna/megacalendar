@@ -29,7 +29,7 @@ def server():
     base = f"http://127.0.0.1:{port}"
     for _ in range(100):
         try:
-            urllib.request.urlopen(f"{base}/api/meta")
+            urllib.request.urlopen(f"{base}/")
             break
         except OSError:
             time.sleep(0.1)
@@ -38,15 +38,22 @@ def server():
     thread.join(timeout=5)
 
 
+BASIC = {"Authorization": "Basic bWFzdGVyOm1hc3Rlcg=="}  # master:master
+
+
 def _post(base, path, body):
-    req = urllib.request.Request(f"{base}{path}", data=json.dumps(body).encode(), headers={"content-type": "application/json"})
+    req = urllib.request.Request(f"{base}{path}", data=json.dumps(body).encode(), headers={"content-type": "application/json", **BASIC})
     return json.load(urllib.request.urlopen(req))
 
 
 def _put(base, path, body):
     req = urllib.request.Request(f"{base}{path}", data=json.dumps(body).encode(), method="PUT",
-                                 headers={"content-type": "application/json"})
+                                 headers={"content-type": "application/json", **BASIC})
     return json.load(urllib.request.urlopen(req))
+
+
+def _get(base, path):
+    return json.load(urllib.request.urlopen(urllib.request.Request(f"{base}{path}", headers=BASIC)))
 
 
 def test_autosave_in_a_real_browser_with_private_holidays(server):
@@ -60,7 +67,12 @@ def test_autosave_in_a_real_browser_with_private_holidays(server):
                                                   "title": "Team", "show_year": True, "show_legend": True})["id"]
             # the page script used to crash when a private holiday row was present
             _put(server, f"/api/projects/{pid}/days/2027-03-15", {"color": "#00ff00", "note": "Kick-off", "day_number_color": "#ffffff"})
-            page = browser.new_page()
+            page = browser.new_context().new_page()
+            page.goto(f"{server}/login")
+            page.fill("input[name=username]", "master")
+            page.fill("input[name=password]", "master")
+            page.click("button[type=submit]")
+            page.wait_for_url(f"{server}/projects")
             errors = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
@@ -72,7 +84,7 @@ def test_autosave_in_a_real_browser_with_private_holidays(server):
             page.check("input[name=show_week_numbers]")
             page.select_option("select[name=month_name_font]", "Lato")
             page.wait_for_function("document.querySelector('#save-status').textContent.startsWith('Saved')", timeout=5000)
-            saved = json.load(urllib.request.urlopen(f"{server}/api/projects/{pid}"))
+            saved = _get(server, f"/api/projects/{pid}")
             assert (saved["orientation"], saved["show_week_numbers"], saved["month_name_font"]) == ("landscape", True, "Lato")
 
             # clicking a private-holiday row loads it into its form

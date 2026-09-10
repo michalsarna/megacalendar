@@ -6,6 +6,12 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
 
 ## Features
 
+- Multi-user: every user has their own projects and artwork library and never sees anyone else's.
+  A built-in **master** user (password `master`, change it after the first login) creates users, sets
+  how many projects each may have (default 1, blank = unlimited), deactivates accounts and resets
+  passwords. Users keep a profile (name, surname, phone, email) and any number of delivery addresses.
+  The landing page is public; everything else needs a login (session cookie, or HTTP Basic for the API).
+
 - Sheet sizes A0 and A1, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
 - Adjustable space between months (validated against the sheet so blocks never overlap), title with
   optional year (stacked when both share an alignment, side by side otherwise).
@@ -54,7 +60,8 @@ pip install -e ".[dev]"
 scripts/start.sh            # or: uvicorn megacalendar.main:app --reload
 ```
 
-Open <http://127.0.0.1:8000>. The SQLite file and uploaded artwork are written to `./data/`.
+Open <http://127.0.0.1:8000> and log in as `master` / `master` (created automatically). The SQLite file,
+uploaded artwork and the session secret are written to `./data/`.
 `scripts/start.sh` passes extra arguments to uvicorn, e.g. `scripts/start.sh --reload`.
 
 ### Locally with PostgreSQL or MySQL
@@ -74,6 +81,21 @@ or `mysql+pymysql://admin:admin@localhost:3306/megacalendar?charset=utf8mb4`.
 Uploaded artwork is stored on disk under `MEGACALENDAR_DATA_DIR` in every case, so keep that directory
 when you move to an external database. Tables are created and extended automatically on startup.
 
+### Users
+
+The first start creates the application user **master / master**, which can add users at *Users*
+(or via `POST /api/users`). Change its password right away under *Profile → Password*, or with:
+
+```bash
+python scripts/manage_users.py set-password master
+python scripts/manage_users.py create alice --limit 3 --email alice@example.com   # asks for a password
+python scripts/manage_users.py list
+```
+
+The script uses the same `DB_*` / `DATABASE_URL` settings as the application. Set
+`MEGACALENDAR_SECRET_KEY` to pin the session-cookie secret (otherwise one is generated into the data
+directory). Deleting a user removes their projects and uploaded files.
+
 ### Provisioning a database (default user/password: admin / admin)
 
 Both scripts are idempotent and accept `[DB_NAME] [DB_USER] [DB_PASSWORD]` (defaults `megacalendar admin admin`).
@@ -87,7 +109,9 @@ MYSQL_HOST=localhost MYSQL_ADMIN_USER=root MYSQL_PWD=secret scripts/provision_my
 ```
 
 The equivalent plain SQL is in `scripts/sql/postgres.sql` and `scripts/sql/mysql.sql`
-(`psql -U postgres -f scripts/sql/postgres.sql`, `mysql -u root -p < scripts/sql/mysql.sql`).
+(`psql -U postgres -f scripts/sql/postgres.sql`, `mysql -u root -p < scripts/sql/mysql.sql`). Both files
+also contain the statement that (re)creates the application's `master` user by hand; it only applies
+after the application has created its tables, since normally the application creates that user itself.
 
 ### Docker
 
@@ -131,7 +155,8 @@ Environment variables:
 | `DB_HOST`, `DB_USER`, `DB_PASSWORD` | – | Required for `postgres`/`mysql` |
 | `DB_PORT`, `DB_NAME` | `5432`/`3306`, `megacalendar` | Optional for `postgres`/`mysql` |
 | `DATABASE_URL` | built from the above | Full SQLAlchemy URL, overrides `DB_*` |
-| `MEGACALENDAR_DATA_DIR` | `./data` (`/data` in Docker) | SQLite file and uploaded artwork |
+| `MEGACALENDAR_DATA_DIR` | `./data` (`/data` in Docker) | SQLite file, uploaded artwork, session secret |
+| `MEGACALENDAR_SECRET_KEY` | generated into the data dir | Secret for signing session cookies |
 | `MEGACALENDAR_FONT_DIR` | `./assets/fonts` | Directory of `.ttf` files |
 | `HOST`, `PORT` | `0.0.0.0`, `8000` | Listen address for `scripts/start.sh` |
 
@@ -145,8 +170,11 @@ Source Sans 3, Noto Sans, Liberation Sans/Serif, GNU FreeSans/FreeSerif, Oswald,
 ## API sketch
 
 ```
+POST   /api/auth/login  {"username","password"}     POST /api/auth/logout      (or send HTTP Basic)
+GET    /api/me    PUT /api/me    POST /api/me/password    GET|POST /api/me/addresses  PUT|DELETE /api/me/addresses/{id}
+GET    /api/users  POST /api/users  GET|PUT|DELETE /api/users/{id}                      (master only)
 GET    /api/meta
-GET    /api/projects                 POST /api/projects
+GET    /api/projects                 POST /api/projects   (403 when the project limit is reached)
 GET    /api/projects/{id}            PUT  /api/projects/{id}        DELETE /api/projects/{id}
 PUT    /api/projects/{id}/days/{YYYY-MM-DD}   body {"color": {"c":0,"m":0,"y":0,"k":12} | null, "note": "…"}
 DELETE /api/projects/{id}/days/{YYYY-MM-DD}
@@ -172,7 +200,8 @@ appears in the content stream, embedded font programs, and matching image colour
 ```
 megacalendar/
   pdf/        rendering engine (no DB knowledge): spec, pagesizes, fonts, days, background, render
-  models.py   SQLAlchemy tables (Project, DayOverride, BackgroundAsset)
+  auth.py     passwords (PBKDF2), session/Basic authentication, master helpers
+  models.py   SQLAlchemy tables (User, DeliveryAddress, Project, DayOverride, BackgroundAsset)
   schemas.py  Pydantic validation shared by API and forms
   service.py  application logic (CRUD, uploads, spec building, PDF generation)
   api.py      JSON API        web.py  HTML UI        main.py  ASGI app

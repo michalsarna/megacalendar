@@ -34,6 +34,7 @@ def init_db() -> None:
     _add_missing_columns()
     _migrate_legacy_backgrounds()
     _backfill_split_text_colors()
+    _bootstrap_users()
 
 
 def _add_missing_columns() -> None:
@@ -54,6 +55,27 @@ def _add_missing_columns() -> None:
                 if not column.nullable and column.server_default is None:
                     raise RuntimeError(f"cannot add NOT NULL column {table.name}.{column.name} without a server_default")
                 conn.execute(text(ddl))
+
+
+def _bootstrap_users() -> None:
+    """Create the master user (master / master) if there is none and give ownerless
+    projects and assets from single-user versions to it."""
+    from sqlalchemy import select
+
+    from .auth import MASTER_DEFAULT_PASSWORD, MASTER_USERNAME, hash_password
+    from .models import BackgroundAsset, Project, User
+
+    with SessionLocal() as db:
+        master = db.scalar(select(User).where(User.is_master.is_(True)).order_by(User.id))
+        if master is None:
+            master = User(username=MASTER_USERNAME, password_hash=hash_password(MASTER_DEFAULT_PASSWORD),
+                          is_master=True, project_limit=None)
+            db.add(master)
+            db.flush()
+        for model in (Project, BackgroundAsset):
+            for row in db.scalars(select(model).where(model.owner_id.is_(None))):
+                row.owner_id = master.id
+        db.commit()
 
 
 def _default_sql(arg) -> str:

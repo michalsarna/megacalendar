@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Users · megacalendar{% endblock %}
+{% block content %}
+{% set v = values or {} %}
+{% if saved %}<div class="ok">User {{ saved }}.</div>{% endif %}
+<h2>Add a user</h2>
+<form method="post" action="/users">
+  <fieldset>
+    <div class="row">
+      <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}"></label>
+      <label>Password <input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
+      <label>Project limit (blank = unlimited) <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>Name <input name="first_name" maxlength="100" value="{{ v.get('first_name', '') }}"></label>
+      <label>Surname <input name="last_name" maxlength="100" value="{{ v.get('last_name', '') }}"></label>
+      <label>Phone <input name="phone" maxlength="50" value="{{ v.get('phone', '') }}"></label>
+      <label>Email <input name="email" type="email" maxlength="200" value="{{ v.get('email', '') }}"></label>
+      <button class="primary" type="submit">Create user</button>
+    </div>
+  </fieldset>
+</form>
+
+<h2>Users</h2>
+<table class="users">
+  <thead><tr><th>User</th><th>Name</th><th>Contact</th><th>Projects</th><th>Limit</th><th>Active</th><th>New password</th><th></th></tr></thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <form method="post" action="/users/{{ u.id }}" id="user-{{ u.id }}"></form>
+      <td><strong>{{ u.username }}</strong>{% if u.is_master %} <span class="hint">master</span>{% endif %}</td>
+      <td><input form="user-{{ u.id }}" name="first_name" value="{{ u.first_name or '' }}" placeholder="Name" style="width:6.5rem">
+          <input form="user-{{ u.id }}" name="last_name" value="{{ u.last_name or '' }}" placeholder="Surname" style="width:7rem"></td>
+      <td><input form="user-{{ u.id }}" name="phone" value="{{ u.phone or '' }}" placeholder="Phone" style="width:7rem">
+          <input form="user-{{ u.id }}" name="email" type="email" value="{{ u.email or '' }}" placeholder="Email" style="width:10rem"></td>
+      <td>{{ counts.get(u.id, 0) }}</td>
+      <td>{% if u.is_master %}unlimited{% else %}<input form="user-{{ u.id }}" name="project_limit" type="number" min="0" value="{{ u.project_limit if u.project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
+      <td>{% if u.is_master %}yes{% else %}<input form="user-{{ u.id }}" type="checkbox" name="is_active" {% if u.is_active %}checked{% endif %}>{% endif %}</td>
+      <td><input form="user-{{ u.id }}" name="password" type="password" minlength="6" placeholder="leave blank to keep" autocomplete="new-password" style="width:9rem"></td>
+      <td class="row-actions">
+        <button form="user-{{ u.id }}" type="submit">Save</button>
+        {% if not u.is_master %}
+        <form method="post" action="/users/{{ u.id }}/delete" onsubmit="return confirm('Delete user “{{ u.username }}” with all their projects and files?')"><button class="danger" type="submit">Delete</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="hint">The master user can add users, set how many projects each may have (blank = unlimited), deactivate accounts and reset passwords. Deleting a user removes their projects and uploaded files. Users never see each other's projects.</p>
+{% endblock %}

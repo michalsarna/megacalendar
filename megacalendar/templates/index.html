@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page-head">
-  <h2>Projects</h2>
-  <a class="btn primary" href="/projects/new">+ New project</a>
+  <h2>My projects <span class="hint">{{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }}{% endif %}</span></h2>
+  {% if can_create %}<a class="btn primary" href="/projects/new">+ New project</a>
+  {% else %}<span class="hint">Project limit reached ({{ user.project_limit }}). Ask the master user for more.</span>{% endif %}
 </div>
 {% if projects %}
 <table>
@@ -25,16 +26,16 @@
   </tbody>
 </table>
 {% else %}
-<p class="hint">No projects yet. Use “New project” to create one.</p>
+<p class="hint">No projects yet.{% if can_create %} Use “New project” to create one.{% endif %}</p>
 {% endif %}
 
-<h2 id="backgrounds">Background library</h2>
+<h2 id="backgrounds">My background library</h2>
 <form method="post" action="/backgrounds" enctype="multipart/form-data">
   <fieldset>
     <div class="row">
       <label>Upload SVG, PNG or JPEG <input type="file" name="file" accept=".svg,.png,.jpg,.jpeg" required></label>
       <button type="submit">Add to library</button>
-      <span class="hint">Files stay on the server and can be selected as the background of any project.</span>
+      <span class="hint">Files stay on the server and can be selected as the background or logo of any of your projects.</span>
     </div>
   </fieldset>
 </form>
