@@ -483,6 +483,73 @@ class LoginIn(BaseModel):
     password: str
 
 
+CODE_LENGTH = 7
+CODE_ALPHABET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+
+def _validate_code(v: str) -> str:
+    v = v.strip().upper()
+    if len(v) != CODE_LENGTH or not CODE_ALPHABET.issuperset(v):
+        raise ValueError(f"code must be {CODE_LENGTH} letters/digits")
+    return v
+
+
+class ConfirmEmailIn(BaseModel):
+    code: str = Field(min_length=CODE_LENGTH, max_length=CODE_LENGTH)
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        return _validate_code(v)
+
+
+class ForgotPasswordIn(BaseModel):
+    identifier: str = Field(min_length=1, max_length=200)  # username or email
+
+
+class ResetPasswordIn(BaseModel):
+    identifier: str = Field(min_length=1, max_length=200)
+    code: str = Field(min_length=CODE_LENGTH, max_length=CODE_LENGTH)
+    new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        return _validate_code(v)
+
+
+class MailSettingsUpdate(BaseModel):
+    host: str | None = Field(default=None, max_length=255)
+    port: int = Field(default=587, ge=1, le=65535)
+    username: str | None = Field(default=None, max_length=255)
+    password: str | None = Field(default=None, max_length=255)  # blank = keep the one already saved
+    use_tls: bool = True
+    from_email: str | None = Field(default=None, max_length=200)
+    from_name: str | None = Field(default=None, max_length=200)
+
+    @field_validator("host", "username", "from_email", "from_name", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("from_email")
+    @classmethod
+    def _email(cls, v):
+        if v is not None and ("@" not in v or v.startswith("@") or v.endswith("@")):
+            raise ValueError("from address must contain a name and a domain")
+        return v
+
+
+class MailSettingsRead(BaseModel):
+    host: str | None
+    port: int
+    username: str | None
+    use_tls: bool
+    from_email: str | None
+    from_name: str | None
+    password_set: bool = False  # the password itself is never sent back to the browser
+
+
 class Meta(BaseModel):
     page_sizes: dict[str, dict[str, float]]
     color_modes: list[str]

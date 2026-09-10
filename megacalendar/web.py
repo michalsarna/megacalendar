@@ -21,8 +21,9 @@ from .pdf import raster
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
-from .schemas import (BACKGROUND_MODES, AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate,
-                      RegisterIn, UserCreate, UserUpdate, country_choices, language_choices)
+from .schemas import (BACKGROUND_MODES, AddressIn, ConfirmEmailIn, DayOverrideIn, MailSettingsUpdate, PasswordChange,
+                      ProfileUpdate, ProjectCreate, ProjectUpdate, RegisterIn, ResetPasswordIn, UserCreate, UserUpdate,
+                      country_choices, language_choices)
 
 router = APIRouter(include_in_schema=False, dependencies=[Depends(verify_csrf)])
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -211,6 +212,9 @@ async def login_submit(request: Request, db: Session = Depends(get_db)):
             request, "login.html", _ctx(request, next=form.get("next", ""), errors=["Wrong username or password."],
                                        username=username, on_login_page=True), status_code=401)
     login_throttle.success(request, username)
+    if not user.email_verified:
+        request.session["pending_confirm_user_id"] = user.id
+        return RedirectResponse("/confirm-email", status_code=303)
     auth.login(request, user)
     return RedirectResponse(_safe_next(str(form.get("next") or "")), status_code=303)
 
@@ -242,8 +246,101 @@ async def register_submit(request: Request, db: Session = Depends(get_db)):
         errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
         return templates.TemplateResponse(request, "register.html", _ctx(request, on_login_page=True, errors=errors, values=values),
                                           status_code=422)
+    request.session["pending_confirm_user_id"] = user.id
+    return RedirectResponse("/confirm-email", status_code=303)
+
+
+# ---------------------------------------------------------------- email confirmation
+
+def _pending_confirm_user(request: Request, db: Session) -> User | None:
+    user_id = request.session.get("pending_confirm_user_id")
+    return service.get_user(db, user_id) if user_id else None
+
+
+@router.get("/confirm-email", response_class=HTMLResponse)
+def confirm_email_page(request: Request, db: Session = Depends(get_db)):
+    user = _pending_confirm_user(request, db)
+    if user is None or user.email_verified:
+        request.session.pop("pending_confirm_user_id", None)
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "confirm_email.html", _ctx(
+        request, on_login_page=True, email=user.email, saved=request.query_params.get("saved")))
+
+
+@router.post("/confirm-email")
+async def confirm_email_submit(request: Request, db: Session = Depends(get_db)):
+    user = _pending_confirm_user(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    form = await request.form()
+    try:
+        data = ConfirmEmailIn(code=str(form.get("code", "")))
+        service.confirm_email(db, user, data.code)
+    except (ValidationError, ValueError) as exc:
+        errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
+        return templates.TemplateResponse(request, "confirm_email.html",
+                                          _ctx(request, on_login_page=True, email=user.email, errors=errors), status_code=422)
+    request.session.pop("pending_confirm_user_id", None)
     auth.login(request, user)
     return RedirectResponse("/projects", status_code=303)
+
+
+@router.post("/confirm-email/resend")
+def confirm_email_resend(request: Request, db: Session = Depends(get_db)):
+    user = _pending_confirm_user(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    try:
+        service.resend_confirmation(db, user)
+    except ValueError as exc:
+        return templates.TemplateResponse(request, "confirm_email.html",
+                                          _ctx(request, on_login_page=True, email=user.email, errors=[str(exc)]), status_code=422)
+    return RedirectResponse("/confirm-email?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------- forgot / reset password
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request, db: Session = Depends(get_db)):
+    if auth.user_from_request(request, db) is not None:
+        return RedirectResponse("/projects", status_code=303)
+    return templates.TemplateResponse(request, "forgot_password.html", _ctx(request, on_login_page=True))
+
+
+@router.post("/forgot-password")
+async def forgot_password_submit(request: Request, db: Session = Depends(get_db)):
+    from urllib.parse import quote
+
+    form = await request.form()
+    identifier = str(form.get("identifier", "")).strip()
+    if identifier:
+        service.request_password_reset(db, identifier)
+    return RedirectResponse(f"/reset-password?identifier={quote(identifier)}&saved=1", status_code=303)
+
+
+@router.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(request: Request):
+    return templates.TemplateResponse(request, "reset_password.html", _ctx(
+        request, on_login_page=True, identifier=request.query_params.get("identifier", ""),
+        saved=request.query_params.get("saved")))
+
+
+@router.post("/reset-password")
+async def reset_password_submit(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    identifier = str(form.get("identifier", "")).strip()
+    try:
+        if form.get("new_password") != form.get("confirm_password"):
+            raise ValueError("the passwords do not match")
+        data = ResetPasswordIn(identifier=identifier, code=str(form.get("code", "")),
+                               new_password=str(form.get("new_password", "")))
+        service.reset_password(db, data.identifier, data.code, data.new_password)
+    except (ValidationError, ValueError) as exc:
+        errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
+        return templates.TemplateResponse(request, "reset_password.html",
+                                          _ctx(request, on_login_page=True, identifier=identifier, errors=errors),
+                                          status_code=422)
+    return RedirectResponse("/login?reset=1", status_code=303)
 
 
 # ---------------------------------------------------------------- projects
@@ -608,3 +705,43 @@ def user_delete(user_id: int, request: Request, user: User = Master, db: Session
     except ValueError as exc:
         return templates.TemplateResponse(request, "users.html", _users_ctx(request, db, user, errors=[str(exc)]), status_code=422)
     return RedirectResponse("/users?saved=deleted", status_code=303)
+
+
+# ---------------------------------------------------------------- mail settings (master only)
+
+@router.get("/settings/mail", response_class=HTMLResponse)
+def mail_settings_page(request: Request, user: User = Master, db: Session = Depends(get_db)):
+    settings = service.get_mail_settings(db)
+    return templates.TemplateResponse(request, "mail_settings.html", _ctx(
+        request, db=db, user=user, settings=settings, saved=request.query_params.get("saved")))
+
+
+@router.post("/settings/mail")
+async def mail_settings_submit(request: Request, user: User = Master, db: Session = Depends(get_db)):
+    form = await request.form()
+    try:
+        data = MailSettingsUpdate(host=form.get("host"), port=form.get("port") or 587, username=form.get("username"),
+                                  password=form.get("password") or None, use_tls=form.get("use_tls") is not None,
+                                  from_email=form.get("from_email"), from_name=form.get("from_name"))
+        service.update_mail_settings(db, data)
+    except (ValidationError, ValueError) as exc:
+        errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
+        settings = service.get_mail_settings(db)
+        return templates.TemplateResponse(request, "mail_settings.html",
+                                          _ctx(request, db=db, user=user, settings=settings, errors=errors), status_code=422)
+    return RedirectResponse("/settings/mail?saved=1", status_code=303)
+
+
+@router.post("/settings/mail/test")
+async def mail_settings_test(request: Request, user: User = Master, db: Session = Depends(get_db)):
+    form = await request.form()
+    settings = service.get_mail_settings(db)
+    try:
+        to_email = str(form.get("test_email") or "").strip()
+        if not to_email:
+            raise ValueError("enter an address to send the test email to")
+        service.send_test_email(db, to_email)
+    except ValueError as exc:
+        return templates.TemplateResponse(request, "mail_settings.html",
+                                          _ctx(request, db=db, user=user, settings=settings, errors=[str(exc)]), status_code=422)
+    return RedirectResponse("/settings/mail?saved=test-sent", status_code=303)

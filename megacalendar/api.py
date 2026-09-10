@@ -15,8 +15,9 @@ from .pdf import raster
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
-from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, DayOverrideIn, DayOverrideRead, LoginIn,
-                      MeRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, RegisterIn,
+from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, ConfirmEmailIn, DayOverrideIn,
+                      DayOverrideRead, ForgotPasswordIn, LoginIn, MailSettingsRead, MailSettingsUpdate, MeRead, Meta,
+                      PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, RegisterIn, ResetPasswordIn,
                       UserCreate, UserRead, UserUpdate)
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(verify_csrf)])
@@ -29,6 +30,11 @@ def _project_or_404(db: Session, project_id: int, user: User) -> Project:
     if project is None:
         raise HTTPException(404, "project not found")
     return project
+
+
+def _pending_confirm_user(request: Request, db: Session) -> User | None:
+    user_id = request.session.get("pending_confirm_user_id") if "session" in request.scope else None
+    return service.get_user(db, user_id) if user_id else None
 
 
 def _user_read(db: Session, user: User) -> UserRead:
@@ -57,19 +63,64 @@ def api_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
         login_throttle.failure(request, data.username)
         raise HTTPException(401, "wrong username or password")
     login_throttle.success(request, data.username)
+    if not user.email_verified:
+        request.session["pending_confirm_user_id"] = user.id
+        raise HTTPException(403, "email address not confirmed yet; use /auth/confirm-email or /auth/resend-confirmation")
     auth.login(request, user)
     return _me_read(db, user, request)
 
 
-@router.post("/auth/register", response_model=MeRead, status_code=201)
+@router.post("/auth/register", status_code=201)
 def api_register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
-    """Self-registration: 1 year calendar and 2 one-month calendars; email and phone must be new."""
+    """Self-registration: 1 year calendar and 2 one-month calendars; email and phone must be new.
+    Not logged in yet: the account is inactive until the emailed code is posted to /auth/confirm-email."""
     try:
         user = service.register_user(db, data)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    request.session["pending_confirm_user_id"] = user.id
+    return {"pending_confirmation": True, "email": user.email}
+
+
+@router.post("/auth/confirm-email", response_model=MeRead)
+def api_confirm_email(data: ConfirmEmailIn, request: Request, db: Session = Depends(get_db)):
+    user = _pending_confirm_user(request, db)
+    if user is None:
+        raise HTTPException(400, "no pending confirmation for this session")
+    try:
+        service.confirm_email(db, user, data.code)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    request.session.pop("pending_confirm_user_id", None)
     auth.login(request, user)
     return _me_read(db, user, request)
+
+
+@router.post("/auth/resend-confirmation", status_code=204)
+def api_resend_confirmation(request: Request, db: Session = Depends(get_db)):
+    user = _pending_confirm_user(request, db)
+    if user is None:
+        raise HTTPException(400, "no pending confirmation for this session")
+    try:
+        service.resend_confirmation(db, user)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/auth/forgot-password", status_code=204)
+def api_forgot_password(data: ForgotPasswordIn, db: Session = Depends(get_db)):
+    service.request_password_reset(db, data.identifier)
+    return Response(status_code=204)  # always 204: do not reveal whether the account exists
+
+
+@router.post("/auth/reset-password", status_code=204)
+def api_reset_password(data: ResetPasswordIn, db: Session = Depends(get_db)):
+    try:
+        service.reset_password(db, data.identifier, data.code, data.new_password)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(status_code=204)
 
 
 @router.post("/auth/logout", status_code=204)
@@ -173,6 +224,28 @@ def delete_user(user_id: int, _: User = Master, db: Session = Depends(get_db)):
         service.delete_user(db, user)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------- mail settings (master only)
+
+@router.get("/settings/mail", response_model=MailSettingsRead)
+def get_mail_settings(_: User = Master, db: Session = Depends(get_db)):
+    return service.mail_settings_read(db)
+
+
+@router.put("/settings/mail", response_model=MailSettingsRead)
+def update_mail_settings(data: MailSettingsUpdate, _: User = Master, db: Session = Depends(get_db)):
+    service.update_mail_settings(db, data)
+    return service.mail_settings_read(db)
+
+
+@router.post("/settings/mail/test", status_code=204)
+def send_mail_settings_test(to_email: str, _: User = Master, db: Session = Depends(get_db)):
+    try:
+        service.send_test_email(db, to_email)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     return Response(status_code=204)
 
 

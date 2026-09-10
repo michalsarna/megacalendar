@@ -253,3 +253,125 @@ def test_svg_with_entities_is_rejected(client):
     bomb = b'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;">]><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><title>&b;</title></svg>'
     r = client.post("/api/backgrounds", files={"file": ("bomb.svg", bomb, "image/svg+xml")})
     assert r.status_code == 422 and "entity" in r.text
+
+
+def test_mail_settings_master_only(client, make_user, mailbox):
+    bob = make_user("bob_mail", "bobpw123")
+    assert bob.get("/api/settings/mail").status_code == 403
+    assert bob.put("/api/settings/mail", json={"host": "x", "from_email": "a@b.io"}).status_code == 403
+
+    assert client.get("/api/settings/mail").status_code == 200  # shared singleton row; other tests may have set it already
+
+    r = client.put("/api/settings/mail", json={"host": "smtp.example.com", "port": 2525, "username": "bot",
+                                                "password": "s3cret", "use_tls": True, "from_email": "no-reply@example.com",
+                                                "from_name": "megacalendar"})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["host"] == "smtp.example.com" and data["port"] == 2525 and data["password_set"] is True
+    assert "password" not in data  # never sent back to the browser
+
+    # blank password on a later update keeps the one already saved
+    r = client.put("/api/settings/mail", json={"host": "smtp.example.com", "from_email": "no-reply@example.com"})
+    assert r.status_code == 200 and r.json()["password_set"] is True
+
+    r = client.put("/api/settings/mail", json={"host": "smtp.example.com", "from_email": "not-an-email"})
+    assert r.status_code == 422
+
+    assert client.post("/api/settings/mail/test", params={"to_email": "someone@example.com"}).status_code == 204
+    assert mailbox[-1][0] == "someone@example.com" and "test" in mailbox[-1][1].lower()
+
+
+def test_mail_settings_web_form(client):
+    page = client.get("/settings/mail").text
+    assert 'name="host"' in page and 'name="from_email"' in page
+    r = client.post("/settings/mail", data={"host": "smtp.example.com", "port": "587", "from_email": "hi@example.com"},
+                    follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/settings/mail?saved=1"
+    assert 'value="smtp.example.com"' in client.get("/settings/mail").text
+
+
+def test_unverified_login_is_blocked_and_resend_works(anon, client, mailbox):
+    from tests.conftest import code_from, configure_mail
+
+    configure_mail(client)
+    contact = {"first_name": "Uma", "last_name": "Unverified", "phone": "+48 700 999 000", "email": "uma@example.com"}
+    r = anon.post("/api/auth/register", json={"username": "uma", "password": "umapw123", **contact})
+    assert r.status_code == 201
+    # correct credentials, but the account is not confirmed yet
+    assert anon.post("/api/auth/login", json={"username": "uma", "password": "umapw123"}).status_code == 403
+    assert anon.get("/api/me").status_code == 401
+    assert anon.post("/api/auth/resend-confirmation").status_code == 204
+    assert len(mailbox) == 2  # register + resend
+    code = code_from(mailbox[-1][2])
+    assert anon.post("/api/auth/confirm-email", json={"code": "0000000"}).status_code == 422
+    r = anon.post("/api/auth/confirm-email", json={"code": code})
+    assert r.status_code == 200 and anon.get("/api/me").json()["username"] == "uma"
+    # nothing pending once confirmed
+    assert anon.post("/api/auth/resend-confirmation").status_code == 400
+    assert anon.post("/api/auth/confirm-email", json={"code": code}).status_code == 400
+
+    # web login redirects to the confirmation page instead of failing outright
+    from fastapi.testclient import TestClient
+
+    from megacalendar.main import app
+    from tests.conftest import csrf_of
+
+    with TestClient(app) as web:
+        contact2 = {**contact, "phone": "+48 700 999 001", "email": "wanda@example.com"}
+        token = csrf_of(web)
+        web.post("/register", data={"username": "wanda", "password": "wandapw1", "confirm_password": "wandapw1",
+                                    "csrf_token": token, **contact2})
+        r = web.post("/login", data={"username": "wanda", "password": "wandapw1", "csrf_token": token}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"] == "/confirm-email"
+        assert web.get("/projects", follow_redirects=False).status_code == 303  # still not logged in
+
+
+def test_password_reset_flow(client, make_user, mailbox):
+    from tests.conftest import code_from, configure_mail
+
+    carol = make_user("carol_reset", "carolpw123", email="carol.reset@example.com")
+    configure_mail(client)
+    assert client.post("/api/auth/forgot-password", json={"identifier": "no-such-user"}).status_code == 204
+    assert not mailbox  # unknown identifier: silent no-op, never an error (so the caller can't tell the difference)
+    assert carol.post("/api/auth/forgot-password", json={"identifier": "carol.reset@example.com"}).status_code == 204
+    assert len(mailbox) == 1
+    code = code_from(mailbox[-1][2])
+
+    assert carol.post("/api/auth/reset-password", json={"identifier": "carol_reset", "code": "0000000",
+                                                         "new_password": "newpassword1"}).status_code == 422
+    r = carol.post("/api/auth/reset-password", json={"identifier": "carol_reset", "code": code.lower(),
+                                                       "new_password": "newpassword1"})
+    assert r.status_code == 204
+
+    from fastapi.testclient import TestClient
+
+    from megacalendar.main import app
+
+    with TestClient(app) as fresh:
+        assert fresh.post("/api/auth/login", json={"username": "carol_reset", "password": "carolpw123"}).status_code == 401
+        assert fresh.post("/api/auth/login", json={"username": "carol_reset", "password": "newpassword1"}).status_code == 200
+    # the code is single-use
+    assert carol.post("/api/auth/reset-password", json={"identifier": "carol_reset", "code": code,
+                                                         "new_password": "another123"}).status_code == 422
+
+
+def test_password_reset_web_form(anon, client, mailbox):
+    from tests.conftest import code_from, configure_mail, csrf_of
+
+    configure_mail(client)
+    dave = client.post("/api/users", json={"username": "dave_reset", "password": "davepw123", "first_name": "D",
+                                           "last_name": "R", "phone": "+48 700 999 002", "email": "dave.reset@example.com"})
+    assert dave.status_code == 201
+    token = csrf_of(anon, "/forgot-password")
+    r = anon.post("/forgot-password", data={"identifier": "dave_reset", "csrf_token": token}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/reset-password?identifier=dave_reset")
+    page = anon.get(r.headers["location"]).text
+    assert "reset code was emailed" in page
+    code = code_from(mailbox[-1][2])
+    r = anon.post("/reset-password", data={"identifier": "dave_reset", "code": code, "new_password": "newdavepw1",
+                                           "confirm_password": "mismatch", "csrf_token": token})
+    assert r.status_code == 422 and "do not match" in r.text
+    r = anon.post("/reset-password", data={"identifier": "dave_reset", "code": code, "new_password": "newdavepw1",
+                                           "confirm_password": "newdavepw1", "csrf_token": token}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/login?reset=1"
+    assert "Password updated" in anon.get(r.headers["location"]).text

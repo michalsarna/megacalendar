@@ -35,6 +35,7 @@ def init_db() -> None:
     _migrate_legacy_backgrounds()
     _backfill_split_text_colors()
     _bootstrap_users()
+    _bootstrap_mail_settings()
 
 
 def _add_missing_columns() -> None:
@@ -84,6 +85,16 @@ def _bootstrap_users() -> None:
             for row in db.scalars(select(model).where(model.owner_id.is_(None))):
                 row.owner_id = master.id
         db.commit()
+
+
+def _bootstrap_mail_settings() -> None:
+    """Ensure the singleton mail settings row (id=1) exists, unconfigured until the master fills it in."""
+    from .models import MailSettings
+
+    with SessionLocal() as db:
+        if db.get(MailSettings, 1) is None:
+            db.add(MailSettings(id=1))
+            db.commit()
 
 
 def _default_sql(arg) -> str:

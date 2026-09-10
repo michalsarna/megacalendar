@@ -16,7 +16,7 @@
     {% if user %}
       <a href="/projects">Projects</a>
       <a href="/profile">Profile</a>
-      {% if user.is_master %}<a href="/users">Users</a>{% endif %}
+      {% if user.is_master %}<a href="/users">Users</a> <a href="/settings/mail">Mail</a>{% endif %}
       <a href="/docs">API</a>
       <span class="who">{{ user.display_name }}{% if user.is_master %} · master{% endif %}</span>
       <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">Log out</button></form>

@@ -14,6 +14,29 @@ from megacalendar.main import app  # noqa: E402
 MASTER = ("master", "master")
 
 
+def code_from(body: str) -> str:
+    """Pull the 7-character confirmation/reset code out of an email body built by megacalendar.mail."""
+    return re.search(r"\b([A-Z0-9]{7})\b", body).group(1)
+
+
+@pytest.fixture
+def mailbox(monkeypatch):
+    """Captures (to, subject, body) instead of hitting a real SMTP server."""
+    sent = []
+
+    def fake_send(host, port, username, password, use_tls, from_email, from_name, to_email, subject, body):
+        sent.append((to_email, subject, body))
+
+    monkeypatch.setattr("megacalendar.mail.send_smtp_mail", fake_send)
+    return sent
+
+
+def configure_mail(client) -> None:
+    """Point mail settings at a (fake) SMTP server so registration/reset flows are unblocked."""
+    r = client.put("/api/settings/mail", json={"host": "smtp.example.com", "from_email": "no-reply@example.com"})
+    assert r.status_code == 200, r.text
+
+
 def csrf_of(client: TestClient, path: str = "/login") -> str:
     """Read the session's CSRF token from a rendered page (as a browser would)."""
     page = client.get(path).text

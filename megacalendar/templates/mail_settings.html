@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Mail settings · megacalendar{% endblock %}
+{% block content %}
+{% if saved == "test-sent" %}<div class="ok">Test email sent.</div>{% elif saved %}<div class="ok">Mail settings saved.</div>{% endif %}
+<h2>Mail settings</h2>
+<p class="hint">SMTP server used to send account confirmation codes and password reset codes. Self-registration is
+  refused until a host and from-address are set here. Leave the password blank to keep the one already saved.</p>
+<form method="post" action="/settings/mail"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <fieldset>
+    <div class="row">
+      <label>SMTP host <input name="host" value="{{ settings.host or '' }}" placeholder="smtp.example.com"></label>
+      <label>Port <input name="port" type="number" min="1" max="65535" value="{{ settings.port }}"></label>
+      <label class="inline"><input type="checkbox" name="use_tls" {% if settings.use_tls %}checked{% endif %}> Use STARTTLS</label>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>Username <input name="username" value="{{ settings.username or '' }}" autocomplete="off"></label>
+      <label>Password <input name="password" type="password"
+            placeholder="{% if settings.password %}•••••• (unchanged){% else %}none set{% endif %}" autocomplete="new-password"></label>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <label>From address <input name="from_email" type="email" value="{{ settings.from_email or '' }}" placeholder="no-reply@example.com"></label>
+      <label>From name <input name="from_name" value="{{ settings.from_name or '' }}" placeholder="megacalendar"></label>
+    </div>
+  </fieldset>
+  <div class="actions"><button class="primary" type="submit">Save mail settings</button></div>
+</form>
+<h3>Send a test email</h3>
+<form method="post" action="/settings/mail/test"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="row">
+    <label>Send to <input name="test_email" type="email" required></label>
+    <button class="btn" type="submit">Send test email</button>
+  </div>
+</form>
+{% endblock %}

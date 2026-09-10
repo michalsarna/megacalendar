@@ -1,23 +1,29 @@
 """Application logic shared by the JSON API and the HTML UI."""
 from __future__ import annotations
 
+import hmac
 import io
+import logging
 import re
+import secrets
+import string
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import config
+from . import config, mail
 from .auth import hash_password, verify_password
-from .models import BackgroundAsset, DayOverride, DeliveryAddress, Project, User
+from .models import BackgroundAsset, DayOverride, DeliveryAddress, MailSettings, Project, User
 from .pdf import CalendarSpec, DayStyle, color_from_dict, render_calendar, render_to_image, to_mode
 from .pdf.render import max_month_gap_mm
-from .schemas import (AddressIn, DayOverrideIn, PasswordChange, ProfileUpdate, ProjectCreate, ProjectUpdate, RegisterIn,
-                      UserCreate, UserUpdate)
+from .schemas import (AddressIn, DayOverrideIn, MailSettingsRead, MailSettingsUpdate, PasswordChange, ProfileUpdate,
+                      ProjectCreate, ProjectUpdate, RegisterIn, UserCreate, UserUpdate)
+
+logger = logging.getLogger(__name__)
 
 
 class LimitReached(ValueError):
@@ -362,24 +368,170 @@ def contact_in_use(db: Session, email: str | None, phone: str | None) -> str | N
 
 
 def register_user(db: Session, data: RegisterIn) -> User:
-    """Self-service registration: refused when the email or phone number is already known."""
+    """Self-service registration: refused when the email or phone number is already known, or
+    when the master hasn't configured a mail server yet (an unconfirmable account is a dead end).
+    The account starts unverified; confirm_email() activates it once the emailed code comes back."""
     field = contact_in_use(db, data.email, data.phone)
     if field:
         raise ValueError(f"an account with this {field} already exists")
-    return create_user(db, UserCreate(**data.model_dump()))
+    settings = get_mail_settings(db)
+    if not mail_configured(settings):
+        raise ValueError("account registration is temporarily unavailable: no mail server is configured yet")
+    user = create_user(db, UserCreate(**data.model_dump()), email_verified=False)
+    code = _issue_code(db, user, "register")
+    try:
+        mail.send_confirmation_email(settings, user.email, code)
+    except Exception as exc:
+        raise ValueError(f"could not send the confirmation email: {exc}") from exc
+    return user
 
 
-def create_user(db: Session, data: UserCreate) -> User:
+def create_user(db: Session, data: UserCreate, email_verified: bool = True) -> User:
     if get_user_by_name(db, data.username) is not None:
         raise ValueError(f"username {data.username!r} is already taken")
     user = User(username=data.username, password_hash=hash_password(data.password), is_master=False,
                 project_limit=data.project_limit, small_project_limit=data.small_project_limit,
                 first_name=data.first_name, last_name=data.last_name,
-                phone=data.phone, email=data.email, locale=data.locale)
+                phone=data.phone, email=data.email, locale=data.locale, email_verified=email_verified)
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
+
+
+# ---------------------------------------------------------------- email confirmation & password reset
+
+CODE_ALPHABET = string.ascii_uppercase + string.digits
+CODE_LENGTH = 7
+CODE_TTL = timedelta(minutes=30)
+
+
+def _generate_code() -> str:
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+
+
+def _issue_code(db: Session, user: User, purpose: str) -> str:
+    code = _generate_code()
+    user.verification_code = code
+    user.verification_code_expires_at = datetime.now(timezone.utc) + CODE_TTL
+    user.verification_purpose = purpose
+    db.commit()
+    return code
+
+
+def _check_code(user: User, code: str, purpose: str) -> None:
+    expires = user.verification_code_expires_at
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)  # SQLite round-trips DateTime(timezone=True) as naive
+    valid = (user.verification_code is not None and user.verification_purpose == purpose
+            and expires is not None and expires >= datetime.now(timezone.utc)
+            and hmac.compare_digest(user.verification_code, code))
+    if not valid:
+        raise ValueError("invalid or expired code")
+
+
+def _clear_code(db: Session, user: User) -> None:
+    user.verification_code = None
+    user.verification_code_expires_at = None
+    user.verification_purpose = None
+    db.commit()
+
+
+def _find_by_identifier(db: Session, identifier: str) -> User | None:
+    """Username or email, for the forgot-password form's single input field."""
+    user = get_user_by_name(db, identifier)
+    if user is not None:
+        return user
+    return db.scalar(select(User).where(func.lower(User.email) == identifier.strip().lower()))
+
+
+def confirm_email(db: Session, user: User, code: str) -> None:
+    if user.email_verified:
+        return
+    _check_code(user, code, "register")
+    user.email_verified = True
+    _clear_code(db, user)
+
+
+def resend_confirmation(db: Session, user: User) -> None:
+    if user.email_verified:
+        raise ValueError("this account is already confirmed")
+    settings = get_mail_settings(db)
+    if not mail_configured(settings):
+        raise ValueError("no mail server is configured; ask the master user to set it up")
+    code = _issue_code(db, user, "register")
+    try:
+        mail.send_confirmation_email(settings, user.email, code)
+    except Exception as exc:
+        raise ValueError(f"could not send the confirmation email: {exc}") from exc
+
+
+def request_password_reset(db: Session, identifier: str) -> None:
+    """No-op when nothing matches, or when mail isn't configured, so the caller can show one
+    generic message regardless of whether the account exists (avoids leaking either fact)."""
+    user = _find_by_identifier(db, identifier)
+    if user is None or not user.is_active:
+        return
+    settings = get_mail_settings(db)
+    if not mail_configured(settings):
+        return
+    code = _issue_code(db, user, "reset")
+    try:
+        mail.send_reset_email(settings, user.email, code)
+    except Exception:
+        logger.exception("failed to send password reset email to user %s", user.id)
+
+
+def reset_password(db: Session, identifier: str, code: str, new_password: str) -> None:
+    user = _find_by_identifier(db, identifier)
+    if user is None:
+        raise ValueError("invalid or expired code")
+    _check_code(user, code, "reset")
+    user.password_hash = hash_password(new_password)
+    _clear_code(db, user)
+
+
+# ---------------------------------------------------------------- mail settings (master)
+
+def get_mail_settings(db: Session) -> MailSettings:
+    settings = db.get(MailSettings, 1)
+    if settings is None:  # db.init_db() creates the row; this guards ad-hoc/test databases
+        settings = MailSettings(id=1)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+def mail_configured(settings: MailSettings) -> bool:
+    return bool(settings.host and settings.from_email)
+
+
+def update_mail_settings(db: Session, data: MailSettingsUpdate) -> MailSettings:
+    settings = get_mail_settings(db)
+    for key in ("host", "port", "username", "use_tls", "from_email", "from_name"):
+        setattr(settings, key, getattr(data, key))
+    if data.password:
+        settings.password = data.password
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+def mail_settings_read(db: Session) -> MailSettingsRead:
+    s = get_mail_settings(db)
+    return MailSettingsRead(host=s.host, port=s.port, username=s.username, use_tls=s.use_tls,
+                            from_email=s.from_email, from_name=s.from_name, password_set=bool(s.password))
+
+
+def send_test_email(db: Session, to_email: str) -> None:
+    settings = get_mail_settings(db)
+    if not mail_configured(settings):
+        raise ValueError("fill in the mail server host and from-address first")
+    try:
+        mail.send_test_email(settings, to_email)
+    except Exception as exc:
+        raise ValueError(f"could not send the test email: {exc}") from exc
 
 
 def update_user(db: Session, user: User, data: UserUpdate) -> User:
