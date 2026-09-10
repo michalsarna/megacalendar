@@ -398,12 +398,16 @@ class AddressRead(AddressIn):
     id: int
 
 
+THEMES = ("system", "light", "dark")
+
+
 class ProfileUpdate(BaseModel):
     first_name: str | None = Field(default=None, max_length=100)
     last_name: str | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=50)
     email: str | None = Field(default=None, max_length=200)
     locale: str = config.DEFAULT_LOCALE  # default language of new calendars
+    theme: str = "system"  # UI colour theme: follows the OS by default
 
     @field_validator("locale")
     @classmethod
@@ -412,6 +416,13 @@ class ProfileUpdate(BaseModel):
             Locale.parse(v)
         except (UnknownLocaleError, ValueError) as exc:
             raise ValueError(f"unknown language/locale {v!r}") from exc
+        return v
+
+    @field_validator("theme")
+    @classmethod
+    def _theme(cls, v: str) -> str:
+        if v not in THEMES:
+            raise ValueError(f"theme must be one of {THEMES}")
         return v
 
     @field_validator("first_name", "last_name", "phone", "email", mode="before")
@@ -424,6 +435,18 @@ class ProfileUpdate(BaseModel):
     def _email(cls, v):
         if v is not None and ("@" not in v or v.startswith("@") or v.endswith("@")):
             raise ValueError("email address must contain a name and a domain")
+        return v
+
+
+class ThemeUpdate(BaseModel):
+    """Just the theme: used by the header toggle so it never touches the rest of the profile."""
+    theme: str
+
+    @field_validator("theme")
+    @classmethod
+    def _theme(cls, v: str) -> str:
+        if v not in THEMES:
+            raise ValueError(f"theme must be one of {THEMES}")
         return v
 
 

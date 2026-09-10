@@ -30,9 +30,9 @@ header a { color: var(--muted); text-decoration: none; }
 .nav { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
 .nav .who { color: var(--ink); font-weight: 600; }
 .nav form { margin: 0; }
-#theme-toggle { font: inherit; background: none; border: 1px solid var(--btn-border); color: var(--muted); font-size: .8rem;
-  padding: .3rem .6rem; border-radius: 4px; cursor: pointer; }
-#theme-toggle:hover { color: var(--ink); border-color: var(--ink); }
+#theme-toggle { width: 1.5rem; height: 1.5rem; padding: 0; flex: none; border-radius: 50%; border: 1px solid var(--btn-border);
+  background: linear-gradient(90deg, #f5f5f0 50%, #16181c 50%); cursor: pointer; }
+#theme-toggle:hover { border-color: var(--ink); }
 .hero { max-width: 760px; margin: 2rem auto; }
 .hero h2 { font-size: 1.6rem; border: 0; margin-bottom: .6rem; }
 .hero p { font-size: 1.05rem; color: var(--ink); }

@@ -161,6 +161,37 @@ def test_profile_password_and_addresses(make_user):
         login(fresh, "carol", "newpass99")
 
 
+def test_theme_preference_is_per_user(make_user):
+    alice = make_user("alice_theme", "alicepw12")
+    assert alice.get("/api/me").json()["theme"] == "system"
+
+    r = alice.post("/api/me/theme", json={"theme": "dark"})
+    assert r.status_code == 204
+    assert alice.get("/api/me").json()["theme"] == "dark"
+    assert alice.post("/api/me/theme", json={"theme": "neon"}).status_code == 422
+
+    page = alice.get("/profile").text
+    assert '<option value="dark" selected>' in page  # profile form reflects the current choice
+    # saving the rest of the profile without touching the select preserves it (no silent reset)
+    r = alice.post("/profile", data={"first_name": "Alice", "last_name": "T", "phone": "", "email": "",
+                                     "locale": "en", "theme": "dark"}, follow_redirects=False)
+    assert r.status_code == 303 and alice.get("/api/me").json()["theme"] == "dark"
+
+    # explicit profile-page change also works
+    r = alice.post("/profile", data={"first_name": "Alice", "last_name": "T", "phone": "", "email": "",
+                                     "locale": "en", "theme": "light"}, follow_redirects=False)
+    assert r.status_code == 303 and alice.get("/api/me").json()["theme"] == "light"
+
+    # a brand-new session for the same account (e.g. a different browser/device) sees it server-rendered
+    from fastapi.testclient import TestClient
+
+    from megacalendar.main import app
+
+    with TestClient(app) as fresh:
+        login(fresh, "alice_theme", "alicepw12")
+        assert 'data-theme="light"' in fresh.get("/projects").text
+
+
 def test_deactivate_and_delete_user(client, make_user):
     dave = make_user("dave", "davepw12")
     pid = dave.post("/api/projects", json={"name": "Dave's", "year": 2027}).json()["id"]

@@ -486,7 +486,7 @@ async def profile_save(request: Request, user: User = CurrentUser, db: Session =
     form = await request.form()
     try:
         service.update_profile(db, user, ProfileUpdate(**{k: form.get(k) for k in ("first_name", "last_name", "phone", "email")},
-                                                        locale=form.get("locale") or "en"))
+                                                        locale=form.get("locale") or "en", theme=form.get("theme") or user.theme))
     except ValidationError as exc:
         return templates.TemplateResponse(request, "profile.html", _profile_ctx(request, db, user, errors=_errors(exc)), status_code=422)
     return RedirectResponse("/profile?saved=profile", status_code=303)

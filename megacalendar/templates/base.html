@@ -1,29 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-user="{{ 'in' if user else 'out' }}"{% if user and user.theme != 'system' %} data-theme="{{ user.theme }}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}megacalendar{% endblock %}</title>
   <meta name="csrf-token" content="{{ csrf_token }}">
+  {% if not user %}
   <script>(function () { var t = localStorage.getItem("theme"); if (t) document.documentElement.setAttribute("data-theme", t); })();</script>
+  {% endif %}
   <link rel="stylesheet" href="/static/style.css">
   {% block head %}{% endblock %}
 </head>
 <body>
+{% macro theme_toggle() %}<button type="button" id="theme-toggle" title="Switch colour theme" aria-label="Switch colour theme"></button>{% endmacro %}
 <header>
   <h1><a href="/">megacalendar</a></h1>
   <span class="hint">print-ready A0/A1 wall calendars</span>
   <nav class="nav">
-    <button type="button" id="theme-toggle" title="Switch between light, dark and system colour theme"></button>
     {% if user %}
       <a href="/projects">Projects</a>
       <a href="/profile">Profile</a>
       {% if user.is_master %}<a href="/users">Users</a>{% endif %}
       <a href="/docs">API</a>
       <span class="who">{{ user.display_name }}{% if user.is_master %} · master{% endif %}</span>
+      {{ theme_toggle() }}
       <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">Log out</button></form>
     {% elif not on_login_page %}
+      {{ theme_toggle() }}
       <a class="btn primary" href="/login">Log in</a>
+    {% else %}
+      {{ theme_toggle() }}
     {% endif %}
   </nav>
 </header>
@@ -36,17 +42,33 @@
 <script>
 // ---- Theme toggle: cycles System -> Light -> Dark -> System. "System" (no stored preference)
 // follows prefers-color-scheme live, including while this tab stays open across an OS theme switch.
+// Logged-in users persist the choice to their profile (works across browsers/devices); signed-out
+// visitors keep it in localStorage only, since there is no account to attach it to.
 (() => {
   const NEXT = { system: "light", light: "dark", dark: "system" };
-  const LABEL = { system: "Theme: System", light: "Theme: Light", dark: "Theme: Dark" };
+  const TITLE = { system: "Theme: System (click to change)", light: "Theme: Light (click to change)", dark: "Theme: Dark (click to change)" };
   const btn = document.getElementById("theme-toggle");
+  const loggedIn = document.documentElement.dataset.user === "in";
   const current = () => document.documentElement.getAttribute("data-theme") || "system";
-  const apply = mode => {
-    if (mode === "system") { document.documentElement.removeAttribute("data-theme"); localStorage.removeItem("theme"); }
-    else { document.documentElement.setAttribute("data-theme", mode); localStorage.setItem("theme", mode); }
-    btn.textContent = LABEL[mode];
+  const setVisual = mode => {
+    if (mode === "system") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", mode);
+    btn.title = TITLE[mode];
+    btn.setAttribute("aria-label", TITLE[mode]);
   };
-  apply(current());
+  const apply = mode => {
+    setVisual(mode);
+    if (loggedIn) {
+      const csrf = document.querySelector("meta[name=csrf-token]").content;
+      fetch("/api/me/theme", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ theme: mode }) });
+    } else if (mode === "system") {
+      localStorage.removeItem("theme");
+    } else {
+      localStorage.setItem("theme", mode);
+    }
+  };
+  setVisual(current());
   btn.addEventListener("click", () => apply(NEXT[current()]));
 })();
 </script>
