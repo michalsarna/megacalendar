@@ -1,8 +1,10 @@
 # megacalendar
 
-Web app that generates **print-ready, large-format wall calendars** as PDF.
+Web app that generates **print-ready, large-format wall calendars** as PDF, PNG or TIFF.
 One calendar year (1 Jan – 31 Dec) on a single sheet from A5 up to A0, in RGB (default) or
-CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
+CMYK, every font and piece of artwork embedded, margins capped at 10 mm. PNG is always an RGB
+screen preview (PNG has no CMYK colour type); TIFF keeps the project's own colour model, so a
+CMYK project downloads as a true CMYK TIFF, pixel-for-pixel the same ink values as the PDF.
 
 ## Features
 
@@ -55,7 +57,7 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
 - HTML editor organised into Project, Sheet, Calendar, Months, Days, Public holidays and Background
   sections; controls that do not apply to the current layout are greyed out and inert. Private holidays
   can be loaded back into their form by clicking a row. Sticky bottom action bar (Save, Download PDF,
-  Delete), native colour pickers (in CMYK mode the picker fills in C/M/Y/K values) and
+  PNG, TIFF, Delete), native colour pickers (in CMYK mode the picker fills in C/M/Y/K values) and
   autosave on every change (the save route answers JSON when asked with `Accept: application/json`),
   plus a JSON API (`/docs` for OpenAPI).
 
@@ -211,6 +213,7 @@ POST   /api/projects/{id}/background (multipart "file": upload into the library 
 DELETE /api/projects/{id}/background (detach only; the file stays in the library)
 POST   /api/projects/{id}/logo         DELETE /api/projects/{id}/logo   (same, for the title-band logo)
 GET    /api/projects/{id}/pdf
+GET    /api/projects/{id}/png    GET /api/projects/{id}/tiff   (?dpi=, default 200, 72-300)
 GET    /api/backgrounds                POST /api/backgrounds (multipart "file")
 DELETE /api/backgrounds/{id}           (409 while any project uses it)
 ```
@@ -228,7 +231,7 @@ appears in the content stream, embedded font programs, and matching image colour
 
 ```
 megacalendar/
-  pdf/        rendering engine (no DB knowledge): spec, pagesizes, fonts, days, background, render
+  pdf/        rendering engine (no DB knowledge): spec, pagesizes, fonts, days, background, render, raster (PNG/TIFF)
   auth.py     passwords (PBKDF2), session/Basic authentication, master helpers
   models.py   SQLAlchemy tables (User, DeliveryAddress, Project, DayOverride, BackgroundAsset)
   schemas.py  Pydantic validation shared by API and forms

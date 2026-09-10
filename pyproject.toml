@@ -18,6 +18,7 @@ dependencies = [
     "holidays>=0.50",
     "babel>=2.15",
     "itsdangerous>=2.1",
+    "pymupdf>=1.24",
 ]
 
 [project.optional-dependencies]
