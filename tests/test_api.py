@@ -92,7 +92,7 @@ def test_layout_alignment_and_uppercase_roundtrip(client):
     assert page.count('class="field dimmed" data-dayname="perday" inert') == 2
     assert 'class="table-only" ' in page and 'class="table-only dimmed"' not in page  # table-only controls active
     assert saved["day_border_color"] == {"r": 128, "g": 128, "b": 128} and saved["day_border_width_mm"] == 0.4
-    assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_number_scale": 10}).status_code == 422
+    assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_number_scale": 5}).status_code == 422
     assert client.post("/api/projects", json={"name": "x", "year": 2027, "day_border_width_mm": 0}).status_code == 422
     assert saved["day_names_uppercase"] is True and saved["month_names_uppercase"] is False
     assert_print_ready(client.get(f"{url}/pdf").content, 841, 594, mode="RGB")

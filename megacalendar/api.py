@@ -15,8 +15,8 @@ from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
 from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, DayOverrideIn, DayOverrideRead, LoginIn,
-                      MeRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, UserCreate,
-                      UserRead, UserUpdate)
+                      MeRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, RegisterIn,
+                      UserCreate, UserRead, UserUpdate)
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(verify_csrf)])
 CurrentUser = Depends(auth.current_user_api)
@@ -56,6 +56,17 @@ def api_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
         login_throttle.failure(request, data.username)
         raise HTTPException(401, "wrong username or password")
     login_throttle.success(request, data.username)
+    auth.login(request, user)
+    return _me_read(db, user, request)
+
+
+@router.post("/auth/register", response_model=MeRead, status_code=201)
+def api_register(data: RegisterIn, request: Request, db: Session = Depends(get_db)):
+    """Self-registration: 1 year calendar and 2 one-month calendars; email and phone must be new."""
+    try:
+        user = service.register_user(db, data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     auth.login(request, user)
     return _me_read(db, user, request)
 

@@ -14,7 +14,7 @@ CSRF_HEADER = "x-csrf-token"
 CSRF_FIELD = "csrf_token"
 # JSON-only login: a cross-site page cannot send application/json without a CORS preflight,
 # and there is no session to protect yet, so this endpoint issues the first token instead.
-CSRF_EXEMPT_PATHS = {"/api/auth/login"}
+CSRF_EXEMPT_PATHS = {"/api/auth/login", "/api/auth/register"}
 
 
 # ---------------------------------------------------------------- CSRF

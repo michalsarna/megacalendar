@@ -36,14 +36,13 @@
 </div>
 {% if small_projects %}
 <table>
-  <thead><tr><th>Name</th><th>Month</th><th>Sheet</th><th>Holidays</th><th>Updated</th><th></th></tr></thead>
+  <thead><tr><th>Name</th><th>Month</th><th>Sheet</th><th>Updated</th><th></th></tr></thead>
   <tbody>
   {% for p in small_projects %}
     <tr>
       <td><a href="/projects/{{ p.id }}">{{ p.name }}</a></td>
       <td>{{ month_names[p.month] }} {{ p.year }}</td>
       <td>{{ p.page_size }} {{ p.orientation }}</td>
-      <td>{{ p.holiday_country if p.holidays_enabled else "—" }}</td>
       <td>{{ p.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
       <td class="row-actions">
         <a class="btn" href="/projects/{{ p.id }}/pdf">PDF</a>

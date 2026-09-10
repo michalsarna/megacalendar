@@ -8,12 +8,15 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
 
 - Two kinds of calendars: **year calendars** (twelve months on one sheet) and **one-month calendars**
   ("small projects", one big month grid). Each user has a separate allowance for both (defaults 1 and 2).
-  Month and year are fixed when a calendar is created.
+  Month and year are fixed when a calendar is created. One-month calendars start as A4 planners (small
+  day numbers in the top-left corner, position adjustable, header optional).
 - Multi-user: every user has their own projects and artwork library and never sees anyone else's.
   A built-in **master** user (password `master`, change it after the first login) creates users, sets
   how many projects each may have (default 1, blank = unlimited), deactivates accounts and resets
   passwords. Users keep a profile (name, surname, phone, email) and any number of delivery addresses.
-  Name, surname, phone and email are required when an account is created.
+  Name, surname, phone and email are required when an account is created. Visitors can register themselves
+  (`/register`, one year and two one-month calendars; an email address or phone number can only belong to one
+  account). Each profile has a default calendar language used for new calendars.
   The landing page is public; everything else needs a login (session cookie, or HTTP Basic for the API).
 
 - Sheet sizes A0 to A5, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
@@ -195,6 +198,7 @@ Source Sans 3, Noto Sans, Liberation Sans/Serif, GNU FreeSans/FreeSerif, Oswald,
 
 ```
 POST   /api/auth/login  {"username","password"}     POST /api/auth/logout      (or send HTTP Basic)
+POST   /api/auth/register {"username","password","first_name","last_name","phone","email","locale"}
 GET    /api/me    PUT /api/me    POST /api/me/password    GET|POST /api/me/addresses  PUT|DELETE /api/me/addresses/{id}
 GET    /api/users  POST /api/users  GET|PUT|DELETE /api/users/{id}                      (master only)
 GET    /api/meta
