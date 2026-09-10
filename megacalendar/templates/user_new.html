@@ -9,7 +9,8 @@
     <div class="row">
       <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus></label>
       <label>Password (min. 8) <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
-      <label>Project limit (blank = unlimited) <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
+      <label>Year calendars (blank = unlimited) <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
+      <label>One-month calendars (blank = unlimited) <input name="small_project_limit" type="number" min="0" value="{{ v.get('small_project_limit', 2) }}"></label>
     </div>
   </fieldset>
   <fieldset>

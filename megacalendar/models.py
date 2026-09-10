@@ -21,7 +21,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(300), nullable=False)
     is_master: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default=true())
-    project_limit: Mapped[int | None] = mapped_column(Integer)  # None = unlimited (master); set by the service
+    project_limit: Mapped[int | None] = mapped_column(Integer)  # year calendars; None = unlimited (master)
+    small_project_limit: Mapped[int | None] = mapped_column(Integer)  # one-month calendars; None = unlimited
 
     first_name: Mapped[str | None] = mapped_column(String(100))
     last_name: Mapped[str | None] = mapped_column(String(100))
@@ -65,7 +66,9 @@ class Project(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(10), default="year", nullable=False, server_default="year")  # year | month
     year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int | None] = mapped_column(Integer)  # fixed at creation for kind == "month"
     title: Mapped[str | None] = mapped_column(String(200))
 
     page_size: Mapped[str] = mapped_column(String(10), default="A1", nullable=False)

@@ -6,6 +6,9 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
 
 ## Features
 
+- Two kinds of calendars: **year calendars** (twelve months on one sheet) and **one-month calendars**
+  ("small projects", one big month grid). Each user has a separate allowance for both (defaults 1 and 2).
+  Month and year are fixed when a calendar is created.
 - Multi-user: every user has their own projects and artwork library and never sees anyone else's.
   A built-in **master** user (password `master`, change it after the first login) creates users, sets
   how many projects each may have (default 1, blank = unlimited), deactivates accounts and resets
@@ -35,7 +38,8 @@ CMYK, every font and piece of artwork embedded, margins capped at 10 mm.
   Public holidays and private holidays can also recolour the day number and (table style) day name.
   An optional legend at the bottom lists the private holidays.
 - Public holidays for 150+ countries/regions via the `holidays` package.
-- Optional border around every month block (line width 0.1–5 mm), drawn above the day cells.
+- Optional border around every month block (line width 0.1–5 mm), drawn above the day cells, and
+  optional borders around every day (all layouts).
 - Background library: uploaded SVG/PNG/JPEG files are kept on the server (`data/uploads/`) and any
   project can select one as its background, with fit mode and opacity.
 - Logo in the title band from the same library: scaled to the band height (width capped at 30% of the
@@ -194,7 +198,8 @@ POST   /api/auth/login  {"username","password"}     POST /api/auth/logout      (
 GET    /api/me    PUT /api/me    POST /api/me/password    GET|POST /api/me/addresses  PUT|DELETE /api/me/addresses/{id}
 GET    /api/users  POST /api/users  GET|PUT|DELETE /api/users/{id}                      (master only)
 GET    /api/meta
-GET    /api/projects                 POST /api/projects   (403 when the project limit is reached)
+GET    /api/projects                 POST /api/projects   {"kind": "year"|"month", "month": 1-12, ...}
+                                                          (403 when the kind's limit is reached)
 GET    /api/projects/{id}            PUT  /api/projects/{id}        DELETE /api/projects/{id}
 PUT    /api/projects/{id}/days/{YYYY-MM-DD}   body {"color": {"c":0,"m":0,"y":0,"k":12} | null, "note": "…"}
 DELETE /api/projects/{id}/days/{YYYY-MM-DD}

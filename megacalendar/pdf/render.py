@@ -67,6 +67,8 @@ class Frame:
 
 def blocks_for(spec: CalendarSpec) -> tuple[int, int]:
     """(columns, rows) of month blocks for the layout/orientation."""
+    if spec.month is not None:
+        return (1, 1)
     if spec.layout == "grid":
         return (3, 4) if spec.orientation == "portrait" else (4, 3)
     return (6, 2) if spec.orientation == "portrait" else (12, 1)
@@ -79,10 +81,10 @@ def max_month_gap_mm(spec: CalendarSpec) -> float:
     content_w, content_h = page_w - 2 * margin, page_h - 2 * margin
     grid_h = content_h - content_h * 0.07 - content_h * 0.025 - content_h * 0.012  # minus title band, gap, footer
     cols, rows = blocks_for(spec)
-    limits = [content_w * MAX_GAP_SHARE / (cols - 1)]
+    limits = [content_w * MAX_GAP_SHARE / (cols - 1)] if cols > 1 else []
     if rows > 1:
         limits.append(grid_h * MAX_GAP_SHARE / (rows - 1))
-    return round(min(limits) / mm, 1)
+    return round(min(limits) / mm, 1) if limits else 0.0
 
 
 def compute_frame(spec: CalendarSpec) -> Frame:
@@ -320,7 +322,28 @@ def _draw_month_grid(
             c.setFillColor(spec.paint(classifier.day_number_color(d)))
             _draw_centered(c, str(d.day), day_font, day_size, cx, cy, cell_w, cell_h)
 
+    # Per-day borders, after all fills so they stay visible
+    if spec.day_border_color is not None:
+        c.setStrokeColor(spec.paint(spec.day_border_color))
+        c.setLineWidth(spec.day_border_width_mm * mm)
+        c.setLineJoin(0)
+        for r in range(min(DAY_ROWS, len(weeks))):
+            cy = dow_y - (r + 1) * cell_h
+            for i, d in enumerate(weeks[r]):
+                if d.month == month:
+                    c.rect(x + week_w + i * cell_w, cy, cell_w, cell_h, stroke=1, fill=0)
+
     _draw_border(c, spec, x, y_top - month_h, month_w, month_h)
+
+
+def _draw_single_month_layout(c, spec, frame, fonts, classifier, month_names, day_names) -> None:
+    """One-month calendar: the whole grid area is a single month block."""
+    month_w, month_h = frame.content_w, frame.grid_h
+    header_h = month_h * 0.14
+    name_size = shared_font_size([month_names[spec.month]], fonts.month.bold,
+                                 scaled(header_h * 0.55, spec.month_name_scale, header_h * 0.9), month_w * 0.95)
+    _draw_month_grid(c, spec, fonts, classifier, spec.month, frame.margin, frame.grid_top, month_w, month_h,
+                     month_names, day_names, name_size)
 
 
 def _draw_grid_layout(c, spec, frame, fonts, classifier, month_names, day_names) -> None:
@@ -484,6 +507,8 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
         raise ValueError(f"unknown colour mode {spec.color_mode!r}; choose one of {COLOR_MODES}")
     if spec.layout not in LAYOUTS:
         raise ValueError(f"unknown layout {spec.layout!r}; choose one of {LAYOUTS}")
+    if spec.month is not None and not 1 <= spec.month <= 12:
+        raise ValueError(f"month must be 1-12, got {spec.month}")
     if spec.title_align not in TITLE_ALIGNS or spec.year_align not in TITLE_ALIGNS:
         raise ValueError(f"unknown title alignment; choose one of {TITLE_ALIGNS}")
     frame = compute_frame(spec)
@@ -498,7 +523,8 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
     c = Canvas(out, pagesize=(frame.page_w, frame.page_h), initialFontName=fonts.base.regular, initialFontSize=12,
                enforceColorSpace=spec.color_mode)  # hard guarantee: a colour in the wrong model raises
     c.setTitle(f"{spec.display_title} wall calendar")
-    c.setSubject(f"{spec.page_size} {spec.orientation} year calendar {spec.year}")
+    period = f"{spec.year}-{spec.month:02d}" if spec.month else str(spec.year)
+    c.setSubject(f"{spec.page_size} {spec.orientation} calendar {period}")
     c.setCreator("megacalendar")
     c.setAuthor("megacalendar")
 
@@ -510,7 +536,10 @@ def render_calendar(spec: CalendarSpec, out: BinaryIO) -> None:
     _draw_title(c, spec, frame, fonts, reserved_w=(logo[2] + frame.content_w * 0.03) if logo else 0.0)
     if logo is not None:
         _draw_logo(c, spec, logo, fonts.base.regular)
-    draw = _draw_grid_layout if spec.layout == "grid" else _draw_columns_layout
+    if spec.month is not None:
+        draw = _draw_single_month_layout
+    else:
+        draw = _draw_grid_layout if spec.layout == "grid" else _draw_columns_layout
     draw(c, spec, frame, fonts, classifier, month_names, day_names)
     if legend is not None:
         _draw_legend(c, spec, frame, fonts, legend)

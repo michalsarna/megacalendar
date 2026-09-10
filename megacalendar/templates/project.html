@@ -39,7 +39,8 @@
 {% macro scale(name, value) %}<input name="{{ name }}" type="number" min="25" max="300" step="5" value="{{ value|int }}" title="% of the automatic size">{% endmacro %}
 
 {% block content %}
-{% set is_table = project.layout == "columns" %}
+{% set is_month = project.kind == "month" %}
+{% set is_table = project.layout == "columns" and not is_month %}
 {% set sample_month = month_names[1] %}
 {% set day_names_off = is_table and not project.table_day_names %}
 {% set per_day_names_off = day_names_off or not is_table %}
@@ -53,7 +54,13 @@
     <legend>Project</legend>
     <div class="row">
       <label>Name <input name="name" value="{{ project.name }}" required maxlength="200"></label>
-      <label>Year <input name="year" type="number" min="1900" max="2200" value="{{ project.year }}" required></label>
+      {% if is_month %}
+      <label>Period <span class="fixed">{{ month_names[project.month] }} {{ project.year }}</span><input type="hidden" name="year" value="{{ project.year }}"></label>
+      <span class="hint">The month and year of a one-month calendar cannot be changed.</span>
+      {% else %}
+      <label>Year <span class="fixed">{{ project.year }}</span><input type="hidden" name="year" value="{{ project.year }}"></label>
+      <span class="hint">The year of a calendar cannot be changed; create a new one for another year.</span>
+      {% endif %}
     </div>
   </fieldset>
 
@@ -66,7 +73,7 @@
         </select></label>
       <label>Orientation
         <select name="orientation">{% for o in orientations %}<option value="{{ o }}" {% if o == project.orientation %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
-      <label>Layout
+      <label{% if is_month %} class="dimmed" inert{% endif %}>Layout{% if is_month %} (one-month calendar){% endif %}
         <select name="layout">
           <option value="grid" {% if not is_table %}selected{% endif %}>Month grids (3×4 / 4×3)</option>
           <option value="columns" {% if is_table %}selected{% endif %}>Table style (one column per month)</option>
@@ -150,7 +157,7 @@
     <div class="row" style="margin-top:.8rem">
       <div class="field"><span>Month border colour (untick = no border)</span>{{ color("month_border_color", project.month_border_color, nullable=True) }}</div>
       <label>Month border width (mm) <input name="month_border_width_mm" type="number" min="0.1" max="5" step="0.1" value="{{ project.month_border_width_mm }}"></label>
-      <label>Space between months (mm, blank = automatic, max {{ month_gap_limit }})
+      <label{% if is_month %} class="dimmed" inert{% endif %}>Space between months (mm, blank = automatic, max {{ month_gap_limit }})
         <input name="month_gap_mm" type="number" min="0" max="{{ month_gap_limit }}" step="0.5" value="{{ project.month_gap_mm if project.month_gap_mm is not none else '' }}" placeholder="auto"></label>
     </div>
   </fieldset>
@@ -176,8 +183,8 @@
       <div class="field"><span>Mon–Fri background (untick = paper)</span>{{ color("weekday_color", project.weekday_color, nullable=True) }}</div>
       <div class="field"><span>Sat–Sun background (untick = paper)</span>{{ color("weekend_color", project.weekend_color, nullable=True) }}</div>
     </div>
-    <div class="row table-only{% if not is_table %} dimmed{% endif %}" style="margin-top:.8rem"{% if not is_table %} inert{% endif %}>
-      <div class="field"><span>Day border colour (untick = no border, Table style)</span>{{ color("day_border_color", project.day_border_color, nullable=True) }}</div>
+    <div class="row" style="margin-top:.8rem">
+      <div class="field"><span>Day border colour (untick = no border)</span>{{ color("day_border_color", project.day_border_color, nullable=True) }}</div>
       <label>Day border width (mm) <input name="day_border_width_mm" type="number" min="0.1" max="3" step="0.1" value="{{ project.day_border_width_mm }}"></label>
     </div>
     <p class="hint">Click a swatch to pick a colour. Public and private holidays below override these for their days.</p>
@@ -222,7 +229,7 @@
   <fieldset>
     <div class="row">
       <label>Month
-        <select name="month" id="ov-month">{% for m in range(1, 13) %}<option value="{{ m }}">{{ month_names[m] }}</option>{% endfor %}</select></label>
+        <select name="month" id="ov-month"{% if is_month %} class="fixed-select"{% endif %}>{% for m in range(1, 13) %}{% if not is_month or m == project.month %}<option value="{{ m }}" {% if is_month %}selected{% endif %}>{{ month_names[m] }}</option>{% endif %}{% endfor %}</select></label>
       <label>Day
         <select name="day_of_month" id="ov-day">{% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></label>
       <span class="hint">Year {{ project.year }}</span>
@@ -339,7 +346,7 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
   const title = document.querySelector('[name=title]');
   const setOff = (el, off) => { el.classList.toggle('dimmed', off); el.inert = off; };
   const sync = () => {
-    const isTable = layout.value === 'columns';
+    const isTable = layout.value === 'columns' && !{{ 'true' if is_month else 'false' }};
     const dayNamesOff = isTable && !tableDayNames.checked;   // day names hidden in table style
     document.querySelectorAll('.table-only').forEach(el => setOff(el, !isTable));
     document.querySelectorAll('[data-dayname="all"]').forEach(el => setOff(el, dayNamesOff));

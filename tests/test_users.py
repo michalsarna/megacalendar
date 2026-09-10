@@ -17,7 +17,7 @@ def test_landing_and_login_flow(anon):
                   follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/projects"
     page = anon.get("/projects").text
-    assert "My projects" in page and 'class="logout"' in page and "master" in page
+    assert "My year calendars" in page and 'class="logout"' in page and "master" in page
     assert "megacalendar by DeerTeam · Copyright 2026" in page
     assert "still uses the default password" in page  # warning until the master password is changed
     assert anon.get("/login", follow_redirects=False).status_code == 303  # already logged in
@@ -88,7 +88,7 @@ def test_master_manages_users_and_limits(client, make_user):
     r = bob.post("/api/projects", json={"name": "three", "year": 2027})
     assert r.status_code == 403 and "limit reached" in r.text
     page = bob.get("/projects").text
-    assert "2 of 2" in page and "Project limit reached" in page and 'href="/projects/new"' not in page
+    assert "2 of 2" in page and "Limit reached" in page and 'href="/projects/new"' not in page
     assert bob.get("/projects/new").status_code == 422
     assert bob.get("/api/me").json()["project_count"] == 2
     # master raises the limit

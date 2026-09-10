@@ -12,7 +12,8 @@
       <label>Email <input name="email" type="email" maxlength="200" value="{{ user.email or '' }}"></label>
       <button class="primary" type="submit">Save profile</button>
     </div>
-    <p class="hint">Projects: {{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }} allowed{% else %} (no limit){% endif %}.</p>
+    <p class="hint">Year calendars: {{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }} allowed{% else %} (no limit){% endif %}.
+       One-month calendars: {{ small_count }}{% if user.small_project_limit is not none %} of {{ user.small_project_limit }} allowed{% else %} (no limit){% endif %}.</p>
   </fieldset>
 </form>
 

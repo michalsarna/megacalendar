@@ -42,7 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("create")
     c.add_argument("username")
     c.add_argument("--password")
-    c.add_argument("--limit", type=int, default=1, help="max projects (default 1)")
+    c.add_argument("--limit", type=int, default=1, help="max year calendars (default 1)")
+    c.add_argument("--small-limit", type=int, default=2, help="max one-month calendars (default 2)")
     c.add_argument("--first-name", required=True)
     c.add_argument("--last-name", required=True)
     c.add_argument("--phone", required=True)
@@ -52,7 +53,9 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--password")
     sl = sub.add_parser("set-limit")
     sl.add_argument("username")
-    sl.add_argument("--limit", type=int, default=None, help="max projects; omit for unlimited")
+    sl.add_argument("--limit", type=int, default=None, help="max year calendars; omit for unlimited")
+    sl.add_argument("--small-limit", type=int, default=None, help="max one-month calendars; omit for unlimited")
+    sl.add_argument("--small", action="store_true", help="only change the one-month limit")
     for name in ("activate", "deactivate", "delete"):
         sub.add_parser(name).add_argument("username")
     args = parser.parse_args(argv)
@@ -63,14 +66,18 @@ def main(argv: list[str] | None = None) -> int:
             counts = service.project_counts(db)
             for u in service.list_users(db):
                 limit = "unlimited" if u.project_limit is None else str(u.project_limit)
+                small_limit = "unlimited" if u.small_project_limit is None else str(u.small_project_limit)
+                small = service.project_counts(db, "month")
                 flags = ("master " if u.is_master else "") + ("" if u.is_active else "inactive ")
-                print(f"{u.username:<20} projects {counts.get(u.id, 0):>3} / {limit:<9} {u.display_name:<30} {u.email or '':<30} {flags}")
+                print(f"{u.username:<20} year {counts.get(u.id, 0):>3} / {limit:<9} month {small.get(u.id, 0):>3} / {small_limit:<9} "
+                      f"{u.display_name:<30} {u.email or '':<30} {flags}")
             return 0
         if args.command == "create":
             data = UserCreate(username=args.username, password=_password(args), project_limit=args.limit,
+                              small_project_limit=args.small_limit,
                               first_name=args.first_name, last_name=args.last_name, phone=args.phone, email=args.email)
             service.create_user(db, data)
-            print(f"created {args.username} (limit {args.limit})")
+            print(f"created {args.username} (year calendars {args.limit}, one-month calendars {args.small_limit})")
             return 0
         user = service.get_user_by_name(db, args.username)
         if user is None:
@@ -82,9 +89,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "set-limit":
             if user.is_master:
                 sys.exit("the master user has no project limit")
-            user.project_limit = args.limit
+            if not args.small:
+                user.project_limit = args.limit
+            if args.small or args.small_limit is not None:
+                user.small_project_limit = args.small_limit
             db.commit()
-            print(f"limit of {user.username} set to {'unlimited' if args.limit is None else args.limit}")
+            print(f"limits of {user.username}: year {'unlimited' if user.project_limit is None else user.project_limit}, "
+                  f"one-month {'unlimited' if user.small_project_limit is None else user.small_project_limit}")
         elif args.command in ("activate", "deactivate"):
             if user.is_master:
                 sys.exit("the master user is always active")

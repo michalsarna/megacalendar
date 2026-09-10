@@ -220,8 +220,16 @@ def logout_submit(request: Request):
 # ---------------------------------------------------------------- projects
 
 def _projects_ctx(request: Request, db: Session, user: User, **extra):
-    return _ctx(request, db=db, user=user, projects=service.list_projects(db, user), next_year=date.today().year + 1,
-                project_count=service.project_count(db, user), can_create=service.can_create_project(db, user), **extra)
+    projects = service.list_projects(db, user)
+    return _ctx(request, db=db, user=user, projects=[p for p in projects if p.kind == "year"],
+                small_projects=[p for p in projects if p.kind == "month"], next_year=date.today().year + 1,
+                project_count=service.project_count(db, user, "year"), can_create=service.can_create_project(db, user, "year"),
+                small_count=service.project_count(db, user, "month"), can_create_small=service.can_create_project(db, user, "month"),
+                month_names=_month_names(user_locale(user)), **extra)
+
+
+def user_locale(user: User) -> str:
+    return "en"
 
 
 @router.get("/projects", response_class=HTMLResponse)
@@ -235,23 +243,31 @@ def _index_with_errors(request: Request, db: Session, user: User, errors: list[s
 
 @router.get("/projects/new", response_class=HTMLResponse)
 def new_project(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
-    if not service.can_create_project(db, user):
-        return _index_with_errors(request, db, user, [f"Project limit reached ({user.project_limit}). Ask the master user for more."])
-    return templates.TemplateResponse(request, "new_project.html", _ctx(request, user=user, next_year=date.today().year + 1))
+    kind = "month" if request.query_params.get("kind") == "month" else "year"
+    if not service.can_create_project(db, user, kind):
+        label = "One-month calendar" if kind == "month" else "Year calendar"
+        return _index_with_errors(request, db, user, [f"{label} limit reached ({service.limit_for(user, kind)}). Ask the master user for more."])
+    return templates.TemplateResponse(request, "new_project.html", _ctx(request, user=user, next_year=date.today().year + 1,
+                                                                          kind=kind, month_names=_month_names("en"),
+                                                                          this_month=date.today().month))
 
 
 @router.post("/projects")
 async def create(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
     form = await request.form()
     try:
+        kind = "month" if form.get("kind") == "month" else "year"
         data = ProjectCreate(name=form.get("name", ""), year=form.get("year"), color_mode=form.get("color_mode") or "RGB",
                              layout=form.get("layout") or "grid", page_size=form.get("page_size") or "A1",
-                             orientation=form.get("orientation") or "portrait")
+                             orientation=form.get("orientation") or "portrait", kind=kind,
+                             month=form.get("month") or None)
         project = service.create_project(db, data, user)
     except ValidationError as exc:
         return templates.TemplateResponse(
             request, "new_project.html",
-            _ctx(request, user=user, next_year=date.today().year + 1, errors=_errors(exc), values=dict(form)), status_code=422,
+            _ctx(request, user=user, next_year=date.today().year + 1, errors=_errors(exc), values=dict(form),
+                 kind="month" if form.get("kind") == "month" else "year", month_names=_month_names("en"),
+                 this_month=date.today().month), status_code=422,
         )
     except service.LimitReached as exc:
         return _index_with_errors(request, db, user, [str(exc)])
@@ -403,7 +419,8 @@ def download_pdf(project_id: int, request: Request, user: User = CurrentUser, db
 # ---------------------------------------------------------------- profile (every user)
 
 def _profile_ctx(request: Request, db: Session, user: User, **extra):
-    return _ctx(request, db=db, user=user, project_count=service.project_count(db, user), **extra)
+    return _ctx(request, db=db, user=user, project_count=service.project_count(db, user, "year"),
+                small_count=service.project_count(db, user, "month"), **extra)
 
 
 @router.get("/profile", response_class=HTMLResponse)
@@ -475,7 +492,8 @@ def address_delete(address_id: int, user: User = CurrentUser, db: Session = Depe
 # ---------------------------------------------------------------- users (master only)
 
 def _users_ctx(request: Request, db: Session, user: User, **extra):
-    return _ctx(request, db=db, user=user, users=service.list_users(db), counts=service.project_counts(db), **extra)
+    return _ctx(request, db=db, user=user, users=service.list_users(db), counts=service.project_counts(db, "year"),
+                small_counts=service.project_counts(db, "month"), **extra)
 
 
 @router.get("/users", response_class=HTMLResponse)
@@ -483,8 +501,8 @@ def users(request: Request, user: User = Master, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "users.html", _users_ctx(request, db, user, saved=request.query_params.get("saved")))
 
 
-def _limit(form: FormData) -> int | None:
-    raw = str(form.get("project_limit") or "").strip()
+def _limit(form: FormData, field: str = "project_limit") -> int | None:
+    raw = str(form.get(field) or "").strip()
     return None if raw == "" else int(raw)
 
 
@@ -498,6 +516,7 @@ async def user_create(request: Request, user: User = Master, db: Session = Depen
     form = await request.form()
     try:
         data = UserCreate(username=form.get("username", ""), password=form.get("password", ""), project_limit=_limit(form),
+                          small_project_limit=_limit(form, "small_project_limit"),
                           **{k: form.get(k) for k in ("first_name", "last_name", "phone", "email")})
         service.create_user(db, data)
     except (ValidationError, ValueError) as exc:
@@ -514,7 +533,8 @@ async def user_update(user_id: int, request: Request, user: User = Master, db: S
         raise HTTPException(404, "user not found")
     form = await request.form()
     try:
-        data = UserUpdate(project_limit=_limit(form), is_active=form.get("is_active") is not None,
+        data = UserUpdate(project_limit=_limit(form), small_project_limit=_limit(form, "small_project_limit"),
+                          is_active=form.get("is_active") is not None,
                           password=form.get("password") or None,
                           **{k: form.get(k) for k in ("first_name", "last_name", "phone", "email")})
         service.update_user(db, target, data)

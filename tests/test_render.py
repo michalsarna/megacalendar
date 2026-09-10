@@ -241,9 +241,9 @@ def test_table_day_borders_are_stroked_after_fills():
     assert bordered.count(b" re S") - plain.count(b" re S") == 365
     assert b"0 0 0 .5 K" in bordered and re.search(rb"\n\.85\d* w", bordered)  # 0.3 mm
     assert bordered.rfind(b" re S") > bordered.rfind(b" re f")
-    # ignored in the grid layout
+    # also drawn in the grid layout: one frame per day
     grid = _content(CalendarSpec(year=2027, layout="grid", day_border_color=CMYK(0, 0, 0, 50)))
-    assert grid.count(b" re S") == 0
+    assert grid.count(b" re S") == 365
 
 
 def test_legend_lists_private_holidays_and_reserves_space():

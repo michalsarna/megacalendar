@@ -291,12 +291,26 @@ class ProjectBase(BaseModel):
         return self
 
 
+PROJECT_KINDS = ("year", "month")
+
+
 class ProjectCreate(ProjectBase):
-    pass
+    kind: str = "year"
+    month: int | None = Field(default=None, ge=1, le=12)
+
+    @model_validator(mode="after")
+    def _kind_month(self):
+        if self.kind not in PROJECT_KINDS:
+            raise ValueError(f"kind must be one of {PROJECT_KINDS}")
+        if self.kind == "month" and self.month is None:
+            raise ValueError("a one-month calendar needs a month (1-12)")
+        if self.kind == "year":
+            self.month = None
+        return self
 
 
 class ProjectUpdate(ProjectBase):
-    pass
+    """Kind, month and year of an existing project cannot be changed."""
 
 
 class DayOverrideIn(BaseModel):
@@ -325,6 +339,8 @@ class BackgroundAssetRead(BaseModel):
 class ProjectRead(ProjectBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    kind: str
+    month: int | None
     background: BackgroundAssetRead | None = None
     logo: BackgroundAssetRead | None = None
     created_at: datetime
@@ -385,7 +401,8 @@ class PasswordChange(BaseModel):
 class UserCreate(ProfileUpdate):
     username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
     password: str = Field(min_length=MIN_PASSWORD, max_length=200)
-    project_limit: int | None = Field(default=1, ge=0)  # None = unlimited
+    project_limit: int | None = Field(default=1, ge=0)  # year calendars; None = unlimited
+    small_project_limit: int | None = Field(default=2, ge=0)  # one-month calendars; None = unlimited
     # contact details are mandatory when an account is created
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
@@ -395,6 +412,7 @@ class UserCreate(ProfileUpdate):
 
 class UserUpdate(ProfileUpdate):
     project_limit: int | None = Field(default=1, ge=0)
+    small_project_limit: int | None = Field(default=2, ge=0)
     is_active: bool = True
     password: str | None = Field(default=None, min_length=MIN_PASSWORD, max_length=200)  # set to reset
 
@@ -406,8 +424,10 @@ class UserRead(ProfileUpdate):
     is_master: bool
     is_active: bool
     project_limit: int | None
+    small_project_limit: int | None
     created_at: datetime
     project_count: int = 0
+    small_project_count: int = 0
     addresses: list[AddressRead] = []
 
 

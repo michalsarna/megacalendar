@@ -134,6 +134,7 @@ class DayStyle:
 @dataclass
 class CalendarSpec:
     year: int
+    month: int | None = None  # set -> a one-month calendar (single big month grid)
     page_size: str = "A1"  # key into pagesizes.PAGE_SIZES
     orientation: str = "portrait"  # portrait | landscape
     margin_mm: float = 10.0

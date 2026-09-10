@@ -29,12 +29,18 @@ def list_projects(db: Session, owner: User) -> list[Project]:
     return list(db.scalars(select(Project).where(Project.owner_id == owner.id).order_by(Project.updated_at.desc())).unique())
 
 
-def project_count(db: Session, owner: User) -> int:
-    return db.scalar(select(func.count()).select_from(Project).where(Project.owner_id == owner.id)) or 0
+def project_count(db: Session, owner: User, kind: str = "year") -> int:
+    return db.scalar(select(func.count()).select_from(Project)
+                     .where(Project.owner_id == owner.id, Project.kind == kind)) or 0
 
 
-def can_create_project(db: Session, owner: User) -> bool:
-    return owner.project_limit is None or project_count(db, owner) < owner.project_limit
+def limit_for(owner: User, kind: str) -> int | None:
+    return owner.project_limit if kind == "year" else owner.small_project_limit
+
+
+def can_create_project(db: Session, owner: User, kind: str = "year") -> bool:
+    limit = limit_for(owner, kind)
+    return limit is None or project_count(db, owner, kind) < limit
 
 
 def get_project(db: Session, project_id: int, owner: User) -> Project | None:
@@ -45,19 +51,25 @@ def get_project(db: Session, project_id: int, owner: User) -> Project | None:
     return project
 
 
+FIXED_AFTER_CREATION = ("kind", "month", "year")
+
+
 def _apply(db: Session, project: Project, data: ProjectCreate | ProjectUpdate, owner: User) -> None:
     for key in ("background_asset_id", "logo_asset_id"):
         asset_id = getattr(data, key)
         if asset_id is not None and get_asset(db, asset_id, owner) is None:
             raise ValueError(f"{key.replace('_', ' ')} {asset_id} does not exist")
     for key, value in data.model_dump().items():
+        if key in FIXED_AFTER_CREATION and project.id is not None:
+            continue  # the period of a calendar never changes once it exists
         setattr(project, key, value)
 
 
 def create_project(db: Session, data: ProjectCreate, owner: User) -> Project:
-    if not can_create_project(db, owner):
-        raise LimitReached(f"project limit reached ({owner.project_limit}); ask the master user for more")
-    project = Project(owner_id=owner.id)
+    if not can_create_project(db, owner, data.kind):
+        label = "one-month calendar" if data.kind == "month" else "year calendar"
+        raise LimitReached(f"{label} limit reached ({limit_for(owner, data.kind)}); ask the master user for more")
+    project = Project(owner_id=owner.id, kind=data.kind, month=data.month)
     _apply(db, project, data, owner)
     db.add(project)
     db.commit()
@@ -245,6 +257,7 @@ def detach_background(db: Session, project: Project) -> Project:
 def spec_from_project(project: Project) -> CalendarSpec:
     return CalendarSpec(
         year=project.year,
+        month=project.month if project.kind == "month" else None,
         page_size=project.page_size,
         orientation=project.orientation,
         margin_mm=project.margin_mm,
@@ -320,8 +333,8 @@ def get_user_by_name(db: Session, username: str) -> User | None:
     return db.scalar(select(User).where(User.username == username))
 
 
-def project_counts(db: Session) -> dict[int, int]:
-    rows = db.execute(select(Project.owner_id, func.count()).group_by(Project.owner_id)).all()
+def project_counts(db: Session, kind: str = "year") -> dict[int, int]:
+    rows = db.execute(select(Project.owner_id, func.count()).where(Project.kind == kind).group_by(Project.owner_id)).all()
     return {owner_id: count for owner_id, count in rows}
 
 
@@ -329,7 +342,8 @@ def create_user(db: Session, data: UserCreate) -> User:
     if get_user_by_name(db, data.username) is not None:
         raise ValueError(f"username {data.username!r} is already taken")
     user = User(username=data.username, password_hash=hash_password(data.password), is_master=False,
-                project_limit=data.project_limit, first_name=data.first_name, last_name=data.last_name,
+                project_limit=data.project_limit, small_project_limit=data.small_project_limit,
+                first_name=data.first_name, last_name=data.last_name,
                 phone=data.phone, email=data.email)
     db.add(user)
     db.commit()
@@ -341,7 +355,8 @@ def update_user(db: Session, user: User, data: UserUpdate) -> User:
     if user.is_master:
         data.is_active = True  # the master account can never be locked out
         data.project_limit = None
-    for key in ("first_name", "last_name", "phone", "email", "project_limit", "is_active"):
+        data.small_project_limit = None
+    for key in ("first_name", "last_name", "phone", "email", "project_limit", "small_project_limit", "is_active"):
         setattr(user, key, getattr(data, key))
     if data.password:
         user.password_hash = hash_password(data.password)
@@ -422,4 +437,5 @@ def generate_pdf(project: Project) -> bytes:
 
 def pdf_filename(project: Project) -> str:
     slug = re.sub(r"[^A-Za-z0-9]+", "-", project.name).strip("-").lower() or "calendar"
-    return f"{slug}-{project.year}-{project.page_size}.pdf"
+    period = f"{project.year}-{project.month:02d}" if project.kind == "month" else str(project.year)
+    return f"{slug}-{period}-{project.page_size}.pdf"
