@@ -167,6 +167,16 @@ def _draw_centered(c: Canvas, text: str, font: str, size: float, x: float, y: fl
     c.drawCentredString(x + w / 2, baseline_for_vcenter(font, size, y, h), text)
 
 
+def _day_number_baseline(font: str, size: float, cy: float, cell_w: float, cell_h: float, align: str) -> float:
+    """Baseline for a day/week number: vertically centred for "center", top corner (planner
+    style) otherwise. Shared by day and week numbers so they always line up on the same row."""
+    if align == "center":
+        return baseline_for_vcenter(font, size, cy, cell_h)
+    pad = min(cell_w, cell_h) * 0.08
+    ascent, _ = pdfmetrics.getAscentDescent(font, size)
+    return cy + cell_h - pad - ascent
+
+
 def shared_font_size(labels, font: str, max_size: float, max_width: float) -> float:
     """One size that fits every label, so e.g. all month headers match."""
     return min(fit_font_size(label, font, max_size, max_width) for label in labels)
@@ -312,7 +322,9 @@ def _draw_month_grid(
             continue
         if spec.show_week_numbers:
             c.setFillColor(spec.paint(spec.week_number_color))
-            _draw_centered(c, str(in_month[0].isocalendar()[1]), day_font, week_size, x, cy, week_w, cell_h)
+            week_baseline = _day_number_baseline(day_font, week_size, cy, cell_w, cell_h, spec.day_number_align)
+            c.setFont(day_font, week_size)
+            c.drawCentredString(x + week_w / 2, week_baseline, str(in_month[0].isocalendar()[1]))
         for i, d in enumerate(week):
             if d.month != month:
                 continue
@@ -322,17 +334,16 @@ def _draw_month_grid(
                 c.setFillColor(spec.paint(bg))
                 c.rect(cx, cy, cell_w, cell_h, stroke=0, fill=1)
             c.setFillColor(spec.paint(classifier.day_number_color(d)))
+            baseline = _day_number_baseline(day_font, day_size, cy, cell_w, cell_h, spec.day_number_align)
+            c.setFont(day_font, day_size)
             if spec.day_number_align == "center":
-                _draw_centered(c, str(d.day), day_font, day_size, cx, cy, cell_w, cell_h)
-            else:  # top corner of the cell, like a planner
+                c.drawCentredString(cx + cell_w / 2, baseline, str(d.day))
+            elif spec.day_number_align == "left":
                 pad = min(cell_w, cell_h) * 0.08
-                ascent, _ = pdfmetrics.getAscentDescent(day_font, day_size)
-                baseline = cy + cell_h - pad - ascent
-                c.setFont(day_font, day_size)
-                if spec.day_number_align == "left":
-                    c.drawString(cx + pad, baseline, str(d.day))
-                else:
-                    c.drawRightString(cx + cell_w - pad, baseline, str(d.day))
+                c.drawString(cx + pad, baseline, str(d.day))
+            else:
+                pad = min(cell_w, cell_h) * 0.08
+                c.drawRightString(cx + cell_w - pad, baseline, str(d.day))
 
     # Per-day borders, after all fills so they stay visible
     if spec.day_border_color is not None:
