@@ -118,8 +118,18 @@ directory). Deleting a user removes their projects and uploaded files.
 
 ### Security notes
 
-- Passwords are stored as PBKDF2-SHA256 hashes (600k iterations); minimum length 8 (the bootstrap
-  `master` / `master` account is the exception and is flagged in the UI until changed).
+- Passwords are stored as PBKDF2-SHA256 hashes (600k iterations); minimum length 12, must contain a
+  lowercase letter, an uppercase letter, a digit and a special character (the bootstrap `master` / `master`
+  account is the exception and is flagged in the UI until changed).
+- Optional TOTP two-factor authentication (RFC 6238, compatible with Google Authenticator and similar
+  apps): enabled per-account at *Profile → Two-factor authentication* (scan a QR code, confirm a 6-digit
+  code — it only turns on once confirmed, so a botched scan can't lock anyone out) and required at every
+  login once on; disabling it needs the current password. `megacalendar/mfa.py` has no DB knowledge.
+- Email addresses are validated with `email-validator` (proper RFC syntax, not just "contains @"); phone
+  numbers with `phonenumbers` (must be international format, `+` and a country code) and stored in
+  canonical E.164 form. Every other free-text field (names, project/day titles and notes, address fields,
+  mail settings) rejects control characters and `<`/`>` as defense in depth against injection, on top of
+  Jinja2's automatic output escaping and the ORM's parameterised queries.
 - Sessions are signed cookies (`SameSite=Lax`, 14 days). Set `MEGACALENDAR_HTTPS=1` behind TLS so the
   cookie is marked `Secure`, and `MEGACALENDAR_SECRET_KEY` to pin the signing secret.
 - CSRF: every state-changing request made with the session cookie must carry the session's token,
@@ -207,11 +217,14 @@ Source Sans 3, Noto Sans, Liberation Sans/Serif, GNU FreeSans/FreeSerif, Oswald,
 
 ```
 POST   /api/auth/login  {"username","password"}     POST /api/auth/logout      (or send HTTP Basic)
+                                                          (401 + mfa code required when the account has MFA on)
+POST   /api/auth/mfa-verify {"code"}                 (completes login after the 401 above)
 POST   /api/auth/register {"username","password","first_name","last_name","phone","email","locale"}
                                                           (not logged in yet: confirm the emailed code first)
 POST   /api/auth/confirm-email {"code"}              POST /api/auth/resend-confirmation
 POST   /api/auth/forgot-password {"identifier"}       POST /api/auth/reset-password {"identifier","code","new_password"}
 GET    /api/me    PUT /api/me    POST /api/me/password    GET|POST /api/me/addresses  PUT|DELETE /api/me/addresses/{id}
+POST   /api/me/mfa/setup   POST /api/me/mfa/confirm {"code"}   POST /api/me/mfa/disable {"current_password"}
 GET    /api/users  POST /api/users  GET|PUT|DELETE /api/users/{id}                      (master only)
 GET|PUT /api/settings/mail   POST /api/settings/mail/test?to_email=…                    (master only)
 GET    /api/meta
@@ -245,6 +258,7 @@ megacalendar/
   pdf/        rendering engine (no DB knowledge): spec, pagesizes, fonts, days, background, render, raster (PNG/TIFF)
   auth.py     passwords (PBKDF2), session/Basic authentication, master helpers
   mail.py     SMTP sending for confirmation/reset/test emails (no DB knowledge)
+  mfa.py      TOTP secret/QR/verification for two-factor authentication (no DB knowledge)
   models.py   SQLAlchemy tables (User, DeliveryAddress, Project, DayOverride, BackgroundAsset, MailSettings)
   schemas.py  Pydantic validation shared by API and forms
   service.py  application logic (CRUD, uploads, spec building, PDF generation)

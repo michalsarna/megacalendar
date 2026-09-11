@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import phone_field with context %}
 {% block title %}Profile · megacalendar{% endblock %}
 {% block content %}
 {% if saved %}<div class="ok">Saved ({{ saved }}).</div>{% endif %}
@@ -8,7 +9,7 @@
     <div class="row">
       <label>Name <input name="first_name" maxlength="100" value="{{ user.first_name or '' }}"></label>
       <label>Surname <input name="last_name" maxlength="100" value="{{ user.last_name or '' }}"></label>
-      <label>Phone <input name="phone" maxlength="50" value="{{ user.phone or '' }}"></label>
+      {{ phone_field("phone", user.phone) }}
       <label>Email <input name="email" type="email" maxlength="200" value="{{ user.email or '' }}"></label>
       <label>Default calendar language
         <select name="locale">{% for code, name in languages %}<option value="{{ code }}" {% if code == user.locale %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
@@ -30,12 +31,28 @@
   <fieldset>
     <div class="row">
       <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
-      <label>New password <input name="new_password" type="password" required minlength="8" autocomplete="new-password"></label>
-      <label>Repeat new password <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label>New password <input name="new_password" type="password" required minlength="12" autocomplete="new-password"></label>
+      <label>Repeat new password <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
       <button type="submit">Change password</button>
     </div>
   </fieldset>
 </form>
+
+<h2 id="mfa">Two-factor authentication</h2>
+{% if user.mfa_enabled %}
+<p class="hint">Enabled: your account requires a 6-digit code from your authenticator app at login.</p>
+<form method="post" action="/profile/mfa/disable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <fieldset>
+    <div class="row">
+      <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
+      <button class="danger" type="submit">Disable two-factor authentication</button>
+    </div>
+  </fieldset>
+</form>
+{% else %}
+<p class="hint">Not enabled. Add a second factor (Google Authenticator or similar) to protect this account.</p>
+<a class="btn" href="/profile/mfa/setup">Set up two-factor authentication</a>
+{% endif %}
 
 <h2 id="addresses">Delivery addresses</h2>
 {% macro address_fields(a) %}
@@ -50,7 +67,7 @@
       {% if a and a.country not in country_names %}<option value="{{ a.country }}" selected>{{ a.country }}</option>{% endif %}
       {% for c in country_names %}<option value="{{ c }}" {% if a and a.country == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
     </select></label>
-  <label>Phone <input name="phone" maxlength="50" value="{{ a.phone or '' if a else '' }}"></label>
+  {{ phone_field("phone", a.phone if a else none) }}
   <label class="inline"><input type="checkbox" name="is_default" {% if a and a.is_default %}checked{% endif %}> Default</label>
 {% endmacro %}
 {% for a in user.addresses %}

@@ -38,6 +38,12 @@ class User(Base):
     verification_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     verification_purpose: Mapped[str | None] = mapped_column(String(10))  # "register" | "reset"
 
+    # Optional TOTP second factor (RFC 6238), compatible with Google Authenticator and similar apps.
+    # totp_secret is set as soon as setup starts but mfa_enabled only flips on once a code is confirmed,
+    # so a half-finished setup can never lock an account out.
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
+    totp_secret: Mapped[str | None] = mapped_column(String(64))
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
     addresses: Mapped[list["DeliveryAddress"]] = relationship(

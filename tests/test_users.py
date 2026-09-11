@@ -1,11 +1,11 @@
 """Multi-user mode: login, isolation, project limits, master administration, profile and addresses."""
-from tests.conftest import MASTER, csrf_of, login
+from tests.conftest import MASTER, STRONG_PW, csrf_of, login
 
 
 def test_landing_and_login_flow(anon):
     page = anon.get("/").text
     assert 'href="/login"' in page and "Print-ready wall calendars" in page and "Log out" not in page
-    assert "megacalendar by DeerTeam · Copyright 2026" in page
+    assert "megacalendar by DeerTeam · Claude made it in 2026" in page
     login_page = anon.get("/login").text
     assert 'class="login-box"' in login_page and 'href="/login"' not in login_page  # no Log in button on the login page itself
     # protected pages redirect to the login page and come back afterwards
@@ -18,7 +18,7 @@ def test_landing_and_login_flow(anon):
     assert r.status_code == 303 and r.headers["location"] == "/projects"
     page = anon.get("/projects").text
     assert "My year calendars" in page and 'class="logout"' in page and "master" in page
-    assert "megacalendar by DeerTeam · Copyright 2026" in page
+    assert "megacalendar by DeerTeam · Claude made it in 2026" in page
     assert "still uses the default password" in page  # warning until the master password is changed
     assert anon.get("/login", follow_redirects=False).status_code == 303  # already logged in
     # open redirects are not followed
@@ -38,7 +38,7 @@ def test_sqlite_mode_has_demo_user(anon):
 
 
 def test_country_dropdown_in_profile(make_user):
-    frank = make_user("frank", "frankpw12")
+    frank = make_user("frank")
     page = frank.get("/profile").text
     assert '<select name="country" required>' in page and "<option value=\"Poland\"" in page and "<option value=\"World\"" not in page
     frank.post("/api/me/addresses", json={"recipient": "F", "street": "S", "postal_code": "1", "city": "C", "country": "Atlantis"})
@@ -63,25 +63,25 @@ def test_api_requires_authentication_and_accepts_basic(anon):
 
 def test_master_manages_users_and_limits(client, make_user):
     contact = {"first_name": "Alice", "last_name": "Liddell", "phone": "+48 600 000 001", "email": "a@x.io"}
-    r = client.post("/api/users", json={"username": "alice", "password": "secret12", **contact})
+    r = client.post("/api/users", json={"username": "alice", "password": STRONG_PW, **contact})
     assert r.status_code == 201, r.text
     alice = r.json()
     assert alice["project_limit"] == 1 and alice["is_master"] is False and alice["is_active"] is True
-    assert client.post("/api/users", json={"username": "alice", "password": "secret12", **contact}).status_code == 422  # taken
-    assert client.post("/api/users", json={"username": "bad name", "password": "secret12", **contact}).status_code == 422
+    assert client.post("/api/users", json={"username": "alice", "password": STRONG_PW, **contact}).status_code == 422  # taken
+    assert client.post("/api/users", json={"username": "bad name", "password": STRONG_PW, **contact}).status_code == 422
     assert client.post("/api/users", json={"username": "bob", "password": "short", **contact}).status_code == 422
     # name, surname, phone and email are mandatory on creation
     for missing in contact:
-        body = {"username": "incomplete", "password": "secret12", **{k: v for k, v in contact.items() if k != missing}}
+        body = {"username": "incomplete", "password": STRONG_PW, **{k: v for k, v in contact.items() if k != missing}}
         assert client.post("/api/users", json=body).status_code == 422, missing
     users = {u["username"]: u for u in client.get("/api/users").json()}
     assert "master" in users and "alice" in users
 
     alice_client = make_user("alice2", limit_check=None) if False else None  # placeholder to keep fixture semantics clear
-    bob = make_user("bob", "bobpass1", project_limit=2, last_name="Builder")
+    bob = make_user("bob", project_limit=2, last_name="Builder")
     # a normal user cannot administer users
     assert bob.get("/api/users").status_code == 403 and bob.get("/users", follow_redirects=False).status_code == 403
-    assert bob.post("/api/users", json={"username": "eve", "password": "secret12"}).status_code == 403
+    assert bob.post("/api/users", json={"username": "eve", "password": STRONG_PW}).status_code == 403
     # project limit: bob may create 2, the third is refused (API 403, UI message)
     for name in ("one", "two"):
         assert bob.post("/api/projects", json={"name": name, "year": 2027}).status_code == 201
@@ -105,8 +105,8 @@ def test_master_manages_users_and_limits(client, make_user):
 
 
 def test_users_are_isolated(make_user):
-    alice = make_user("alice_iso", "alicepw1")
-    bob = make_user("bob_iso", "bobpw123")
+    alice = make_user("alice_iso")
+    bob = make_user("bob_iso")
     pid = alice.post("/api/projects", json={"name": "Alice only", "year": 2027}).json()["id"]
     asset = alice.post("/api/backgrounds", files={"file": ("a.svg", b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>', "image/svg+xml")}).json()
     # bob sees nothing of alice's
@@ -124,7 +124,7 @@ def test_users_are_isolated(make_user):
 
 
 def test_profile_password_and_addresses(make_user):
-    carol = make_user("carol", "carolpw1")
+    carol = make_user("carol", STRONG_PW)
     r = carol.put("/api/me", json={"first_name": "Carol", "last_name": "Danvers", "phone": "+48 600 000 000", "email": "carol@example.com"})
     assert r.status_code == 200 and r.json()["last_name"] == "Danvers"
     assert carol.put("/api/me", json={"email": "not-an-email"}).status_code == 422
@@ -148,21 +148,21 @@ def test_profile_password_and_addresses(make_user):
     assert "Home" in carol.get("/profile").text
 
     # password change requires the current password; the new one works for login
-    assert carol.post("/api/me/password", json={"current_password": "wrong", "new_password": "newpass99"}).status_code == 422
-    assert carol.post("/api/me/password", json={"current_password": "carolpw1", "new_password": "newpass99"}).status_code == 204
-    r = carol.post("/profile/password", data={"current_password": "newpass99", "new_password": "again123", "confirm_password": "mismatch"})
+    assert carol.post("/api/me/password", json={"current_password": "wrong", "new_password": "NewCarolPw9!"}).status_code == 422
+    assert carol.post("/api/me/password", json={"current_password": STRONG_PW, "new_password": "NewCarolPw9!"}).status_code == 204
+    r = carol.post("/profile/password", data={"current_password": "NewCarolPw9!", "new_password": "Again1234!", "confirm_password": "mismatch"})
     assert r.status_code == 422 and "do not match" in r.text
     from fastapi.testclient import TestClient
 
     from megacalendar.main import app
 
     with TestClient(app) as fresh:
-        assert fresh.post("/login", data={"username": "carol", "password": "carolpw1", "csrf_token": csrf_of(fresh)}).status_code == 401
-        login(fresh, "carol", "newpass99")
+        assert fresh.post("/login", data={"username": "carol", "password": STRONG_PW, "csrf_token": csrf_of(fresh)}).status_code == 401
+        login(fresh, "carol", "NewCarolPw9!")
 
 
 def test_theme_preference_is_per_user(make_user):
-    alice = make_user("alice_theme", "alicepw12")
+    alice = make_user("alice_theme", STRONG_PW)
     assert alice.get("/api/me").json()["theme"] == "system"
 
     r = alice.post("/api/me/theme", json={"theme": "dark"})
@@ -188,12 +188,12 @@ def test_theme_preference_is_per_user(make_user):
     from megacalendar.main import app
 
     with TestClient(app) as fresh:
-        login(fresh, "alice_theme", "alicepw12")
+        login(fresh, "alice_theme", STRONG_PW)
         assert 'data-theme="light"' in fresh.get("/projects").text
 
 
 def test_deactivate_and_delete_user(client, make_user):
-    dave = make_user("dave", "davepw12")
+    dave = make_user("dave", STRONG_PW)
     pid = dave.post("/api/projects", json={"name": "Dave's", "year": 2027}).json()["id"]
     dave_id = dave.user["id"]
     client.put(f"/api/users/{dave_id}", json={"project_limit": 1, "is_active": False})
@@ -203,7 +203,7 @@ def test_deactivate_and_delete_user(client, make_user):
     from megacalendar.main import app
 
     with TestClient(app) as fresh:
-        assert fresh.post("/login", data={"username": "dave", "password": "davepw12", "csrf_token": csrf_of(fresh)}).status_code == 401
+        assert fresh.post("/login", data={"username": "dave", "password": STRONG_PW, "csrf_token": csrf_of(fresh)}).status_code == 401
     # master cannot be deleted or deactivated; deleting dave removes his project
     master_id = client.get("/api/me").json()["id"]
     assert client.delete(f"/api/users/{master_id}").status_code == 409
@@ -217,19 +217,19 @@ def test_deactivate_and_delete_user(client, make_user):
     assert 'href="/users/new"' in page and "master" in page and 'name="first_name" value=' not in page.split("<tbody>")[1].replace('type="hidden" name="first_name"', "")
     assert "Add a user" not in page
     assert "Create user" in client.get("/users/new").text
-    r = client.post("/users", data={"username": "erin", "password": "erinpw12", "project_limit": "3", "first_name": "Erin"})
+    r = client.post("/users", data={"username": "erin", "password": STRONG_PW, "project_limit": "3", "first_name": "Erin"})
     assert r.status_code == 422 and 'name="last_name"' in r.text  # incomplete contact: form re-rendered
-    r = client.post("/users", data={"username": "erin", "password": "erinpw12", "project_limit": "3", "first_name": "Erin",
-                                     "last_name": "Evans", "phone": "123456", "email": "erin@example.com"}, follow_redirects=False)
+    r = client.post("/users", data={"username": "erin", "password": STRONG_PW, "project_limit": "3", "first_name": "Erin",
+                                     "last_name": "Evans", "phone": "+48 700 555 003", "email": "erin@example.com"}, follow_redirects=False)
     assert r.status_code == 303
     page = client.get("/users").text
     assert "Erin Evans" in page and "erin@example.com" in page
     erin = next(u for u in client.get("/api/users").json() if u["username"] == "erin")
     assert erin["project_limit"] == 3 and erin["first_name"] == "Erin"
-    r = client.post(f"/users/{erin['id']}", data={"project_limit": "", "is_active": "on", "password": "newerin1"}, follow_redirects=False)
+    r = client.post(f"/users/{erin['id']}", data={"project_limit": "", "is_active": "on", "password": "NewErinPw12!"}, follow_redirects=False)
     assert r.status_code == 303 and client.get(f"/api/users/{erin['id']}").json()["project_limit"] is None
     with TestClient(app) as fresh:
-        login(fresh, "erin", "newerin1")
+        login(fresh, "erin", "NewErinPw12!")
 
 
 def test_csrf_protection(anon, client):
@@ -287,7 +287,7 @@ def test_svg_with_entities_is_rejected(client):
 
 
 def test_mail_settings_master_only(client, make_user, mailbox):
-    bob = make_user("bob_mail", "bobpw123")
+    bob = make_user("bob_mail")
     assert bob.get("/api/settings/mail").status_code == 403
     assert bob.put("/api/settings/mail", json={"host": "x", "from_email": "a@b.io"}).status_code == 403
 
@@ -326,10 +326,10 @@ def test_unverified_login_is_blocked_and_resend_works(anon, client, mailbox):
 
     configure_mail(client)
     contact = {"first_name": "Uma", "last_name": "Unverified", "phone": "+48 700 999 000", "email": "uma@example.com"}
-    r = anon.post("/api/auth/register", json={"username": "uma", "password": "umapw123", **contact})
+    r = anon.post("/api/auth/register", json={"username": "uma", "password": STRONG_PW, **contact})
     assert r.status_code == 201
     # correct credentials, but the account is not confirmed yet
-    assert anon.post("/api/auth/login", json={"username": "uma", "password": "umapw123"}).status_code == 403
+    assert anon.post("/api/auth/login", json={"username": "uma", "password": STRONG_PW}).status_code == 403
     assert anon.get("/api/me").status_code == 401
     assert anon.post("/api/auth/resend-confirmation").status_code == 204
     assert len(mailbox) == 2  # register + resend
@@ -350,9 +350,9 @@ def test_unverified_login_is_blocked_and_resend_works(anon, client, mailbox):
     with TestClient(app) as web:
         contact2 = {**contact, "phone": "+48 700 999 001", "email": "wanda@example.com"}
         token = csrf_of(web)
-        web.post("/register", data={"username": "wanda", "password": "wandapw1", "confirm_password": "wandapw1",
+        web.post("/register", data={"username": "wanda", "password": STRONG_PW, "confirm_password": STRONG_PW,
                                     "csrf_token": token, **contact2})
-        r = web.post("/login", data={"username": "wanda", "password": "wandapw1", "csrf_token": token}, follow_redirects=False)
+        r = web.post("/login", data={"username": "wanda", "password": STRONG_PW, "csrf_token": token}, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/confirm-email"
         assert web.get("/projects", follow_redirects=False).status_code == 303  # still not logged in
 
@@ -360,7 +360,7 @@ def test_unverified_login_is_blocked_and_resend_works(anon, client, mailbox):
 def test_password_reset_flow(client, make_user, mailbox):
     from tests.conftest import code_from, configure_mail
 
-    carol = make_user("carol_reset", "carolpw123", email="carol.reset@example.com")
+    carol = make_user("carol_reset", STRONG_PW, email="carol.reset@example.com")
     configure_mail(client)
     assert client.post("/api/auth/forgot-password", json={"identifier": "no-such-user"}).status_code == 204
     assert not mailbox  # unknown identifier: silent no-op, never an error (so the caller can't tell the difference)
@@ -369,9 +369,9 @@ def test_password_reset_flow(client, make_user, mailbox):
     code = code_from(mailbox[-1][2])
 
     assert carol.post("/api/auth/reset-password", json={"identifier": "carol_reset", "code": "0000000",
-                                                         "new_password": "newpassword1"}).status_code == 422
+                                                         "new_password": "NewCarolPw1!"}).status_code == 422
     r = carol.post("/api/auth/reset-password", json={"identifier": "carol_reset", "code": code.lower(),
-                                                       "new_password": "newpassword1"})
+                                                       "new_password": "NewCarolPw1!"})
     assert r.status_code == 204
 
     from fastapi.testclient import TestClient
@@ -379,18 +379,18 @@ def test_password_reset_flow(client, make_user, mailbox):
     from megacalendar.main import app
 
     with TestClient(app) as fresh:
-        assert fresh.post("/api/auth/login", json={"username": "carol_reset", "password": "carolpw123"}).status_code == 401
-        assert fresh.post("/api/auth/login", json={"username": "carol_reset", "password": "newpassword1"}).status_code == 200
+        assert fresh.post("/api/auth/login", json={"username": "carol_reset", "password": STRONG_PW}).status_code == 401
+        assert fresh.post("/api/auth/login", json={"username": "carol_reset", "password": "NewCarolPw1!"}).status_code == 200
     # the code is single-use
     assert carol.post("/api/auth/reset-password", json={"identifier": "carol_reset", "code": code,
-                                                         "new_password": "another123"}).status_code == 422
+                                                         "new_password": "AnotherPw123!"}).status_code == 422
 
 
 def test_password_reset_web_form(anon, client, mailbox):
     from tests.conftest import code_from, configure_mail, csrf_of
 
     configure_mail(client)
-    dave = client.post("/api/users", json={"username": "dave_reset", "password": "davepw123", "first_name": "D",
+    dave = client.post("/api/users", json={"username": "dave_reset", "password": STRONG_PW, "first_name": "D",
                                            "last_name": "R", "phone": "+48 700 999 002", "email": "dave.reset@example.com"})
     assert dave.status_code == 201
     token = csrf_of(anon, "/forgot-password")
@@ -399,10 +399,10 @@ def test_password_reset_web_form(anon, client, mailbox):
     page = anon.get(r.headers["location"]).text
     assert "reset code was emailed" in page
     code = code_from(mailbox[-1][2])
-    r = anon.post("/reset-password", data={"identifier": "dave_reset", "code": code, "new_password": "newdavepw1",
+    r = anon.post("/reset-password", data={"identifier": "dave_reset", "code": code, "new_password": "NewDavePw12!",
                                            "confirm_password": "mismatch", "csrf_token": token})
     assert r.status_code == 422 and "do not match" in r.text
-    r = anon.post("/reset-password", data={"identifier": "dave_reset", "code": code, "new_password": "newdavepw1",
-                                           "confirm_password": "newdavepw1", "csrf_token": token}, follow_redirects=False)
+    r = anon.post("/reset-password", data={"identifier": "dave_reset", "code": code, "new_password": "NewDavePw12!",
+                                           "confirm_password": "NewDavePw12!", "csrf_token": token}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/login?reset=1"
     assert "Password updated" in anon.get(r.headers["location"]).text

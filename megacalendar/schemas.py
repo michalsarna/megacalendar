@@ -1,12 +1,16 @@
 """Pydantic models: validation for both the JSON API and the HTML forms."""
 from __future__ import annotations
 
+import unicodedata
 from datetime import date, datetime
 from functools import lru_cache
 from typing import Annotated, Any
 
 import holidays
+import phonenumbers
 from babel import Locale, UnknownLocaleError, localedata
+from email_validator import EmailNotValidError, validate_email
+from phonenumbers import NumberParseException
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from . import config
@@ -15,6 +19,62 @@ from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, RGB, TITLE_ALIGNS, VALIGNS, color_from_dict, to_mode
 
 BACKGROUND_MODES = ("cover", "contain", "stretch")
+
+
+# ---------------------------------------------------------------- shared field validators
+
+def reject_unsafe_text(v: str) -> str:
+    """Defense in depth for every free-text field: no control/format characters (NUL, CR/LF,
+    zero-width tricks, ...) and no angle brackets (blocks HTML/script injection even though
+    templates already auto-escape). Applied in addition to, never instead of, output escaping."""
+    for ch in v:
+        if unicodedata.category(ch) in ("Cc", "Cf"):
+            raise ValueError("must not contain control characters")
+    if "<" in v or ">" in v:
+        raise ValueError("must not contain '<' or '>'")
+    return v
+
+
+def validate_email_address(v: str) -> str:
+    v = v.strip()
+    try:
+        validate_email(v, check_deliverability=False)
+    except EmailNotValidError as exc:
+        raise ValueError(f"invalid email address: {exc}") from exc
+    return v
+
+
+def validate_phone_number(v: str) -> str:
+    """Requires international format (leading + and country code) and returns the canonical
+    E.164 form, so later exact-match duplicate checks don't need to know about formatting."""
+    v = v.strip()
+    if not v.startswith("+"):
+        raise ValueError("phone number must be in international format, starting with + and a country code")
+    try:
+        parsed = phonenumbers.parse(v, None)
+    except NumberParseException as exc:
+        raise ValueError(f"invalid phone number: {exc}") from exc
+    if not phonenumbers.is_possible_number(parsed):
+        raise ValueError("invalid phone number")
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+
+
+MIN_PASSWORD = 12
+_PASSWORD_SPECIAL_CHARS = set("!@#$%^&*()-_=+[]{}|;:,.<>/?~`'\"\\ ")
+
+
+def validate_password_strength(v: str) -> str:
+    if len(v) < MIN_PASSWORD:
+        raise ValueError(f"password must be at least {MIN_PASSWORD} characters")
+    if not any(c.islower() for c in v):
+        raise ValueError("password must contain a lowercase letter")
+    if not any(c.isupper() for c in v):
+        raise ValueError("password must contain an uppercase letter")
+    if not any(c.isdigit() for c in v):
+        raise ValueError("password must contain a digit")
+    if not any(c in _PASSWORD_SPECIAL_CHARS for c in v):
+        raise ValueError("password must contain a special character")
+    return v
 
 
 class CMYKModel(BaseModel):
@@ -79,6 +139,41 @@ def country_choices() -> list[str]:
     territories = Locale.parse("en").territories
     names = [name for code, name in territories.items() if len(code) == 2 and code.isalpha() and code not in ("ZZ", "QO", "EU", "EZ", "UN")]
     return sorted(set(names))
+
+
+def _flag_emoji(region: str) -> str:
+    """Two-letter ISO region -> flag emoji, via the Unicode regional-indicator-symbol trick
+    (each letter A-Z maps to U+1F1E6.. in order, and pairing two makes the flag glyph)."""
+    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in region.upper())
+
+
+@lru_cache(maxsize=1)
+def phone_country_choices() -> list[tuple[str, str, str]]:
+    """("+dial code", flag emoji, "Country name (+code)") for every region phonenumbers knows,
+    sorted by name; the phone number field itself holds only the national number, the picker
+    carries the dial code (and is the only place it's displayed)."""
+    territories = Locale.parse("en").territories
+    out = []
+    for region in phonenumbers.SUPPORTED_REGIONS:
+        name = territories.get(region)
+        code = phonenumbers.country_code_for_region(region)
+        if not name or not code:
+            continue
+        out.append((f"+{code}", _flag_emoji(region), f"{name} (+{code})"))
+    return sorted(out, key=lambda t: t[2].lower())
+
+
+def split_phone_number(value: str | None) -> tuple[str, str]:
+    """("+dial code", rest of the digits) to pre-fill the phone widget's two controls from a
+    stored E.164 value; ("", digits-only-fallback) when it isn't a parseable number (blank, or
+    legacy data from before validation existed)."""
+    if not value:
+        return "", ""
+    try:
+        parsed = phonenumbers.parse(value, None)
+    except NumberParseException:
+        return "", value.lstrip("+")
+    return f"+{parsed.country_code}", str(parsed.national_number)
 
 
 @lru_cache(maxsize=1)
@@ -297,6 +392,11 @@ class ProjectBase(BaseModel):
             return None
         return v
 
+    @field_validator("name", "title")
+    @classmethod
+    def _safe(cls, v: str | None) -> str | None:
+        return v if v is None else reject_unsafe_text(v)
+
     @model_validator(mode="after")
     def _holidays(self):
         if self.holidays_enabled:
@@ -374,6 +474,11 @@ class DayOverrideIn(BaseModel):
     day_name_color: ColorModel | None = None  # None = inherit
     note: str | None = Field(default=None, max_length=200)
 
+    @field_validator("note")
+    @classmethod
+    def _safe(cls, v: str | None) -> str | None:
+        return v if v is None else reject_unsafe_text(v)
+
 
 class DayOverrideRead(DayOverrideIn):
     model_config = ConfigDict(from_attributes=True)
@@ -420,6 +525,16 @@ class AddressIn(BaseModel):
     def _blank(cls, v):
         return None if isinstance(v, str) and not v.strip() else v
 
+    @field_validator("label", "recipient", "street", "postal_code", "city", "country")
+    @classmethod
+    def _safe(cls, v: str | None) -> str | None:
+        return v if v is None else reject_unsafe_text(v)
+
+    @field_validator("phone")
+    @classmethod
+    def _phone(cls, v: str | None) -> str | None:
+        return v if v is None else validate_phone_number(v)
+
 
 class AddressRead(AddressIn):
     model_config = ConfigDict(from_attributes=True)
@@ -458,12 +573,20 @@ class ProfileUpdate(BaseModel):
     def _blank(cls, v):
         return None if isinstance(v, str) and not v.strip() else v
 
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _safe(cls, v: str | None) -> str | None:
+        return v if v is None else reject_unsafe_text(v)
+
     @field_validator("email")
     @classmethod
-    def _email(cls, v):
-        if v is not None and ("@" not in v or v.startswith("@") or v.endswith("@")):
-            raise ValueError("email address must contain a name and a domain")
-        return v
+    def _email(cls, v: str | None) -> str | None:
+        return v if v is None else validate_email_address(v)
+
+    @field_validator("phone")
+    @classmethod
+    def _phone(cls, v: str | None) -> str | None:
+        return v if v is None else validate_phone_number(v)
 
 
 class ThemeUpdate(BaseModel):
@@ -478,12 +601,14 @@ class ThemeUpdate(BaseModel):
         return v
 
 
-MIN_PASSWORD = 8
-
-
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strength(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class UserCreate(ProfileUpdate):
@@ -496,6 +621,11 @@ class UserCreate(ProfileUpdate):
     last_name: str = Field(min_length=1, max_length=100)
     phone: str = Field(min_length=3, max_length=50)
     email: str = Field(min_length=3, max_length=200)
+
+    @field_validator("password")
+    @classmethod
+    def _strength(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class RegisterIn(UserCreate):
@@ -510,6 +640,11 @@ class UserUpdate(ProfileUpdate):
     is_active: bool = True
     password: str | None = Field(default=None, min_length=MIN_PASSWORD, max_length=200)  # set to reset
 
+    @field_validator("password")
+    @classmethod
+    def _strength(cls, v: str | None) -> str | None:
+        return v if v is None else validate_password_strength(v)
+
 
 class UserRead(ProfileUpdate):
     model_config = ConfigDict(from_attributes=True)
@@ -517,6 +652,7 @@ class UserRead(ProfileUpdate):
     username: str
     is_master: bool
     is_active: bool
+    mfa_enabled: bool
     project_limit: int | None
     small_project_limit: int | None
     created_at: datetime
@@ -554,8 +690,39 @@ class ConfirmEmailIn(BaseModel):
         return _validate_code(v)
 
 
+TOTP_CODE_LENGTH = 6
+
+
+class MfaSetupRead(BaseModel):
+    secret: str  # base32; shown once so the app can be added by hand if the QR can't be scanned
+    otpauth_url: str
+    qr_data_uri: str
+
+
+class MfaCodeIn(BaseModel):
+    """A 6-digit TOTP code: MFA setup confirmation and login verification both take just this."""
+    code: str = Field(min_length=TOTP_CODE_LENGTH, max_length=TOTP_CODE_LENGTH)
+
+    @field_validator("code")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) != TOTP_CODE_LENGTH or not v.isdigit():
+            raise ValueError(f"code must be {TOTP_CODE_LENGTH} digits")
+        return v
+
+
+class MfaDisableIn(BaseModel):
+    current_password: str
+
+
 class ForgotPasswordIn(BaseModel):
     identifier: str = Field(min_length=1, max_length=200)  # username or email
+
+    @field_validator("identifier")
+    @classmethod
+    def _safe(cls, v: str) -> str:
+        return reject_unsafe_text(v)
 
 
 class ResetPasswordIn(BaseModel):
@@ -563,10 +730,20 @@ class ResetPasswordIn(BaseModel):
     code: str = Field(min_length=CODE_LENGTH, max_length=CODE_LENGTH)
     new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
 
+    @field_validator("identifier")
+    @classmethod
+    def _safe(cls, v: str) -> str:
+        return reject_unsafe_text(v)
+
     @field_validator("code")
     @classmethod
     def _code(cls, v: str) -> str:
         return _validate_code(v)
+
+    @field_validator("new_password")
+    @classmethod
+    def _strength(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class MailSettingsUpdate(BaseModel):
@@ -583,12 +760,15 @@ class MailSettingsUpdate(BaseModel):
     def _blank(cls, v):
         return None if isinstance(v, str) and not v.strip() else v
 
+    @field_validator("host", "username", "from_name")
+    @classmethod
+    def _safe(cls, v: str | None) -> str | None:
+        return v if v is None else reject_unsafe_text(v)
+
     @field_validator("from_email")
     @classmethod
-    def _email(cls, v):
-        if v is not None and ("@" not in v or v.startswith("@") or v.endswith("@")):
-            raise ValueError("from address must contain a name and a domain")
-        return v
+    def _email(cls, v: str | None) -> str | None:
+        return v if v is None else validate_email_address(v)
 
 
 class MailSettingsRead(BaseModel):

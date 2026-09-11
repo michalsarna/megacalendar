@@ -15,7 +15,7 @@ from fastapi import UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import config, mail
+from . import config, mail, mfa
 from .auth import hash_password, verify_password
 from .models import BackgroundAsset, DayOverride, DeliveryAddress, MailSettings, Project, User
 from .pdf import CalendarSpec, DayStyle, color_from_dict, render_calendar, render_to_image, to_mode
@@ -534,6 +534,38 @@ def send_test_email(db: Session, to_email: str) -> None:
         mail.send_test_email(settings, to_email)
     except Exception as exc:
         raise ValueError(f"could not send the test email: {exc}") from exc
+
+
+# ---------------------------------------------------------------- two-factor authentication (TOTP)
+
+def start_mfa_setup(db: Session, user: User) -> tuple[str, str]:
+    """Generates and stores a fresh secret (overwriting any unconfirmed one from a previous,
+    abandoned attempt); returns (secret, otpauth provisioning URI). Not enabled until confirmed."""
+    secret = mfa.generate_secret()
+    user.totp_secret = secret
+    db.commit()
+    return secret, mfa.provisioning_uri(secret, user.username)
+
+
+def confirm_mfa_setup(db: Session, user: User, code: str) -> None:
+    if not user.totp_secret:
+        raise ValueError("start MFA setup first")
+    if not mfa.verify_code(user.totp_secret, code):
+        raise ValueError("invalid authentication code")
+    user.mfa_enabled = True
+    db.commit()
+
+
+def disable_mfa(db: Session, user: User, current_password: str) -> None:
+    if not verify_password(current_password, user.password_hash):
+        raise ValueError("current password is wrong")
+    user.mfa_enabled = False
+    user.totp_secret = None
+    db.commit()
+
+
+def verify_mfa_code(user: User, code: str) -> bool:
+    return bool(user.totp_secret) and mfa.verify_code(user.totp_secret, code)
 
 
 def update_user(db: Session, user: User, data: UserUpdate) -> User:

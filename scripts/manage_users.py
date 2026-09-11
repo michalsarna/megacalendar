@@ -22,7 +22,7 @@ import sys
 from megacalendar.auth import hash_password
 from megacalendar.db import SessionLocal, init_db
 from megacalendar.models import User
-from megacalendar.schemas import UserCreate
+from megacalendar.schemas import UserCreate, validate_password_strength
 from megacalendar import service
 
 
@@ -83,7 +83,12 @@ def main(argv: list[str] | None = None) -> int:
         if user is None:
             sys.exit(f"no such user: {args.username}")
         if args.command == "set-password":
-            user.password_hash = hash_password(_password(args))
+            pw = _password(args)
+            try:
+                validate_password_strength(pw)
+            except ValueError as exc:
+                sys.exit(str(exc))
+            user.password_hash = hash_password(pw)
             db.commit()
             print(f"password of {user.username} changed")
         elif args.command == "set-limit":

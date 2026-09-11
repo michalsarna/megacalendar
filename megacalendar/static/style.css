@@ -80,6 +80,10 @@ input[type=checkbox] { min-width: 0; }
 button, .btn { font: inherit; padding: .45rem .9rem; border-radius: 4px; border: 1px solid var(--btn-border); background: var(--surface); cursor: pointer; text-decoration: none; color: var(--ink); }
 button.primary, .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 button.danger { color: var(--accent); border-color: var(--accent); }
+button.dirty { background: var(--ok-border); border-color: var(--ok-border); color: #fff; }
+.phone-field-row { display: flex; gap: .3rem; }
+.phone-field-row .phone-cc { width: 11rem; flex: none; }
+.phone-field-row .phone-number { flex: 1; min-width: 8rem; }
 .actions { display: flex; gap: .6rem; flex-wrap: wrap; margin: 1rem 0; align-items: center; }
 table { border-collapse: collapse; width: 100%; background: var(--surface); }
 th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); font-size: .9rem; }

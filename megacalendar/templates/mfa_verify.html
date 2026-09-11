@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Verify your identity · megacalendar{% endblock %}
+{% block content %}
+<div class="login-box">
+  <h2>Two-factor authentication</h2>
+  <p class="hint" style="text-align:center">Enter the 6-digit code from your authenticator app.</p>
+  <form method="post" action="/mfa-verify"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next or '' }}">
+    <fieldset>
+      <label>Authentication code
+        <input name="code" required minlength="6" maxlength="6" inputmode="numeric" pattern="[0-9]*" autofocus
+              autocomplete="one-time-code" style="letter-spacing:.3em;text-align:center;font-size:1.3rem"></label>
+    </fieldset>
+    <div class="actions"><button class="primary" type="submit" style="width:100%">Verify</button></div>
+  </form>
+  <p class="hint" style="text-align:center"><a href="/login">Back to log in</a></p>
+</div>
+{% endblock %}

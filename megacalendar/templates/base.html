@@ -38,7 +38,7 @@
   {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
   {% block content %}{% endblock %}
 </main>
-<footer class="site-footer">megacalendar by DeerTeam · Copyright 2026</footer>
+<footer class="site-footer">megacalendar by DeerTeam · Claude made it in 2026</footer>
 <script>
 // ---- Theme toggle: cycles System -> Light -> Dark -> System. "System" (no stored preference)
 // follows prefers-color-scheme live, including while this tab stays open across an OS theme switch.
@@ -70,6 +70,21 @@
   };
   setVisual(current());
   btn.addEventListener("click", () => apply(NEXT[current()]));
+})();
+
+// ---- Phone fields: a flag/country picker carries the dial code, a plain input takes the rest
+// of the number; the hidden "phone" field posted to the server combines the two.
+(() => {
+  document.querySelectorAll(".phone-field").forEach(field => {
+    const select = field.querySelector(".phone-cc");
+    const number = field.querySelector(".phone-number");
+    const hidden = field.querySelector(".phone-hidden");
+    if (!select || !number || !hidden) return;
+    const sync = () => { hidden.value = [select.value, number.value.trim()].filter(Boolean).join(" "); };
+    select.addEventListener("change", sync);
+    number.addEventListener("input", sync);
+    sync();
+  });
 })();
 </script>
 </body>
