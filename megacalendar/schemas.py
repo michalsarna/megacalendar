@@ -141,11 +141,17 @@ def country_choices() -> list[str]:
     return sorted(set(names))
 
 
+def _flag_emoji(region: str) -> str:
+    """Two-letter ISO region -> flag emoji, via the Unicode regional-indicator-symbol trick
+    (each letter A-Z maps to U+1F1E6.. in order, and pairing two makes the flag glyph)."""
+    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in region.upper())
+
+
 @lru_cache(maxsize=1)
-def phone_country_choices() -> list[tuple[str, str]]:
-    """("+dial code", "Country name (+code)") for every region phonenumbers knows, sorted by name;
-    used by the country-code picker next to phone number fields (the field itself still holds the
-    full international number, the picker just fills in / swaps the leading "+code")."""
+def phone_country_choices() -> list[tuple[str, str, str]]:
+    """("+dial code", flag emoji, "Country name (+code)") for every region phonenumbers knows,
+    sorted by name; the phone number field itself holds only the national number, the picker
+    carries the dial code (and is the only place it's displayed)."""
     territories = Locale.parse("en").territories
     out = []
     for region in phonenumbers.SUPPORTED_REGIONS:
@@ -153,8 +159,21 @@ def phone_country_choices() -> list[tuple[str, str]]:
         code = phonenumbers.country_code_for_region(region)
         if not name or not code:
             continue
-        out.append((f"+{code}", f"{name} (+{code})"))
-    return sorted(out, key=lambda t: t[1].lower())
+        out.append((f"+{code}", _flag_emoji(region), f"{name} (+{code})"))
+    return sorted(out, key=lambda t: t[2].lower())
+
+
+def split_phone_number(value: str | None) -> tuple[str, str]:
+    """("+dial code", rest of the digits) to pre-fill the phone widget's two controls from a
+    stored E.164 value; ("", digits-only-fallback) when it isn't a parseable number (blank, or
+    legacy data from before validation existed)."""
+    if not value:
+        return "", ""
+    try:
+        parsed = phonenumbers.parse(value, None)
+    except NumberParseException:
+        return "", value.lstrip("+")
+    return f"+{parsed.country_code}", str(parsed.national_number)
 
 
 @lru_cache(maxsize=1)

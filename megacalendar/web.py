@@ -23,7 +23,7 @@ from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, RGB, TITLE_ALIGNS, color_from_dict, to_mode
 from .schemas import (BACKGROUND_MODES, AddressIn, ConfirmEmailIn, DayOverrideIn, MailSettingsUpdate, PasswordChange,
                       ProfileUpdate, ProjectCreate, ProjectUpdate, RegisterIn, ResetPasswordIn, UserCreate, UserUpdate,
-                      country_choices, language_choices, phone_country_choices)
+                      country_choices, language_choices, phone_country_choices, split_phone_number)
 
 router = APIRouter(include_in_schema=False, dependencies=[Depends(verify_csrf)])
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -46,6 +46,7 @@ def to_hex(color: dict | None) -> str:
 
 
 templates.env.globals["to_hex"] = to_hex
+templates.env.globals["split_phone_number"] = split_phone_number
 
 
 def _form_color_mode(form: FormData) -> str:

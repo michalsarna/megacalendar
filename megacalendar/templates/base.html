@@ -72,23 +72,17 @@
   btn.addEventListener("click", () => apply(NEXT[current()]));
 })();
 
-// ---- Phone fields: a country-code picker next to the number, purely as a convenience for
-// filling in / swapping the leading "+code" — the number input still holds the full value posted.
+// ---- Phone fields: a flag/country picker carries the dial code, a plain input takes the rest
+// of the number; the hidden "phone" field posted to the server combines the two.
 (() => {
   document.querySelectorAll(".phone-field").forEach(field => {
     const select = field.querySelector(".phone-cc");
-    const input = field.querySelector(".phone-number");
-    if (!select || !input) return;
-    const codes = [...select.options].map(o => o.value).filter(Boolean).sort((a, b) => b.length - a.length);
-    const sync = () => { select.value = codes.find(c => input.value === c || input.value.startsWith(c + " ")) || ""; };
-    select.addEventListener("change", () => {
-      if (!select.value) return;
-      const rest = input.value.replace(/^\+\d{1,4}\s*/, "");
-      input.value = rest ? `${select.value} ${rest}` : `${select.value} `;
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
-    });
-    input.addEventListener("input", sync);
+    const number = field.querySelector(".phone-number");
+    const hidden = field.querySelector(".phone-hidden");
+    if (!select || !number || !hidden) return;
+    const sync = () => { hidden.value = [select.value, number.value.trim()].filter(Boolean).join(" "); };
+    select.addEventListener("change", sync);
+    number.addEventListener("input", sync);
     sync();
   });
 })();
