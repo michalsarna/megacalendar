@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Set up two-factor authentication · megacalendar{% endblock %}
+{% block content %}
+<h2>Set up two-factor authentication</h2>
+<p class="hint">Scan this QR code with Google Authenticator (or any compatible TOTP app), then enter the 6-digit
+  code it shows to confirm setup. Two-factor authentication stays off until you confirm.</p>
+<div class="row" style="align-items:flex-start">
+  <img src="{{ qr }}" alt="QR code for two-factor authentication setup" width="220" height="220">
+  <div>
+    <p class="hint">Can't scan the code? Enter this key manually:</p>
+    <code style="font-size:1.1rem;letter-spacing:.1em">{{ secret }}</code>
+  </div>
+</div>
+<form method="post" action="/profile/mfa/setup" style="margin-top:1rem"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <fieldset>
+    <div class="row">
+      <label>6-digit code
+        <input name="code" required minlength="6" maxlength="6" inputmode="numeric" pattern="[0-9]*" autofocus
+              autocomplete="one-time-code" style="letter-spacing:.3em;text-align:center;font-size:1.3rem"></label>
+      <button class="primary" type="submit">Confirm and enable</button>
+    </div>
+  </fieldset>
+</form>
+<p class="hint"><a href="/profile#mfa">Cancel</a></p>
+{% endblock %}

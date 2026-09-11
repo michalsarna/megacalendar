@@ -10,8 +10,8 @@
       <legend>Account</legend>
       <div class="row">
         <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus autocomplete="username"></label>
-        <label>Password (min. 8) <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
-        <label>Repeat password <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></label>
+        <label>Password (min. 12, upper+lower+digit+special) <input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
+        <label>Repeat password <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
       </div>
     </fieldset>
     <fieldset>

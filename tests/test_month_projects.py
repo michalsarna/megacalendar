@@ -8,6 +8,7 @@ from pypdf import PdfReader
 
 from megacalendar.pdf import CalendarSpec, RGB, render_calendar
 from megacalendar.pdf.spec import CMYK, DayStyle
+from tests.conftest import STRONG_PW, code_from, configure_mail, csrf_of
 from tests.helpers import assert_print_ready
 
 
@@ -65,7 +66,7 @@ def test_day_borders_in_grid_layout_and_year_calendar():
 # ---------------------------------------------------------------- API / limits / immutability
 
 def test_small_projects_have_their_own_limit_and_fixed_month(make_user):
-    gina = make_user("gina", "ginapw123")
+    gina = make_user("gina")
     assert gina.user["small_project_limit"] == 2 and gina.user["project_limit"] == 1
     r = gina.post("/api/projects", json={"name": "March", "year": 2027, "kind": "month", "month": 3})
     assert r.status_code == 201, r.text
@@ -101,7 +102,7 @@ def test_small_projects_have_their_own_limit_and_fixed_month(make_user):
 
 
 def test_master_sets_small_limit(client, make_user):
-    hank = make_user("hank", "hankpw123", small_project_limit=0)
+    hank = make_user("hank", small_project_limit=0)
     assert hank.post("/api/projects", json={"name": "m", "year": 2027, "kind": "month", "month": 1}).status_code == 403
     r = client.put(f"/api/users/{hank.user['id']}", json={"project_limit": 1, "small_project_limit": None, "is_active": True})
     assert r.status_code == 200 and r.json()["small_project_limit"] is None
@@ -114,7 +115,7 @@ def test_master_sets_small_limit(client, make_user):
 # ---------------------------------------------------------------- HTML
 
 def test_month_calendar_pages(make_user):
-    ivy = make_user("ivy", "ivypw1234")
+    ivy = make_user("ivy")
     page = ivy.get("/projects").text
     assert "My one-month calendars" in page and 'href="/projects/new?kind=month"' in page and "0 of 2" in page
     page = ivy.get("/projects/new?kind=month").text
@@ -146,19 +147,17 @@ def test_registration_requires_mail_server(anon, client):
     # explicit reset: mail settings are a shared singleton, so an earlier test may have configured them
     assert client.put("/api/settings/mail", json={}).status_code == 200
     contact = {"first_name": "Rita", "last_name": "Reg", "phone": "+48 700 100 200", "email": "Rita@Example.com"}
-    r = anon.post("/api/auth/register", json={"username": "rita", "password": "ritapw123", **contact})
+    r = anon.post("/api/auth/register", json={"username": "rita", "password": STRONG_PW, **contact})
     assert r.status_code == 422 and "mail server" in r.text
 
 
 def test_registration_with_unique_contact(anon, client, mailbox):
-    from tests.conftest import code_from, configure_mail, csrf_of
-
     configure_mail(client)
     page = anon.get("/").text
     assert 'href="/register"' in page and "Log in</a>" not in page.split("<main>")[1].split("</main>")[0]  # no login button in the body
     assert 'href="/register"' in anon.get("/login").text
     contact = {"first_name": "Rita", "last_name": "Reg", "phone": "+48 700 100 200", "email": "Rita@Example.com"}
-    r = anon.post("/api/auth/register", json={"username": "rita", "password": "ritapw123", "locale": "pl", **contact})
+    r = anon.post("/api/auth/register", json={"username": "rita", "password": STRONG_PW, "locale": "pl", **contact})
     assert r.status_code == 201, r.text
     assert r.json() == {"pending_confirmation": True, "email": "Rita@Example.com"}
     assert anon.get("/api/me").status_code == 401  # not logged in until confirmed
@@ -181,17 +180,17 @@ def test_registration_with_unique_contact(anon, client, mailbox):
 
     with TestClient(app) as other:
         dup_mail = {**contact, "phone": "+48 999 999 999", "email": "rita@example.com"}
-        r = other.post("/api/auth/register", json={"username": "rita2", "password": "ritapw123", **dup_mail})
+        r = other.post("/api/auth/register", json={"username": "rita2", "password": STRONG_PW, **dup_mail})
         assert r.status_code == 422 and "email already exists" in r.text
         dup_phone = {**contact, "email": "new@example.com", "phone": "+48700-100-200"}
-        r = other.post("/api/auth/register", json={"username": "rita3", "password": "ritapw123", **dup_phone})
+        r = other.post("/api/auth/register", json={"username": "rita3", "password": STRONG_PW, **dup_phone})
         assert r.status_code == 422 and "phone already exists" in r.text
         # HTML form path
         token = csrf_of(other)
         r = other.post("/register", data={"username": "sam", "password": "sampw1234", "confirm_password": "nope", "first_name": "S",
                                           "last_name": "S", "phone": "+48 1", "email": "s@x.io", "locale": "en", "csrf_token": token})
         assert r.status_code == 422 and "do not match" in r.text
-        r = other.post("/register", data={"username": "sam", "password": "sampw1234", "confirm_password": "sampw1234", "first_name": "S",
+        r = other.post("/register", data={"username": "sam", "password": STRONG_PW, "confirm_password": STRONG_PW, "first_name": "S",
                                           "last_name": "S", "phone": "+48 700 100 201", "email": "sam@x.io", "locale": "fi",
                                           "csrf_token": token}, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"] == "/confirm-email"
@@ -210,7 +209,7 @@ def test_registration_with_unique_contact(anon, client, mailbox):
 
 
 def test_month_calendar_defaults_and_title_toggle(make_user):
-    jo = make_user("jo", "jopw12345")
+    jo = make_user("jo")
     p = jo.post("/api/projects", json={"name": "Jan", "year": 2027, "kind": "month", "month": 1}).json()
     assert (p["page_size"], p["day_number_scale"], p["day_number_align"], p["show_title"]) == ("A4", 50, "left", True)
     assert (p["day_number_valign"], p["day_border_color"]) == ("top", {"r": 77, "g": 77, "b": 77})  # planner style, border on
@@ -218,7 +217,7 @@ def test_month_calendar_defaults_and_title_toggle(make_user):
     assert (y["page_size"], y["day_number_scale"], y["day_number_align"]) == ("A1", 100, "center")
     assert (y["day_number_valign"], y["day_border_color"]) == ("middle", None)  # grid year calendars: no border by default
     # explicit values win over the month defaults
-    jo2 = make_user("jo2", "jopw12345", small_project_limit=3)
+    jo2 = make_user("jo2", small_project_limit=3)
     p2 = jo2.post("/api/projects", json={"name": "Feb", "year": 2027, "kind": "month", "month": 2, "page_size": "A3",
                                          "day_number_align": "right"}).json()
     assert (p2["page_size"], p2["day_number_align"]) == ("A3", "right")

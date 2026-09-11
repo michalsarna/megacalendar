@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
-from . import auth, config, service
+from . import auth, config, mfa, service
 from .db import get_db
 from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
@@ -217,6 +217,11 @@ async def login_submit(request: Request, db: Session = Depends(get_db)):
     if not user.email_verified:
         request.session["pending_confirm_user_id"] = user.id
         return RedirectResponse("/confirm-email", status_code=303)
+    if user.mfa_enabled:
+        from urllib.parse import quote
+
+        request.session["pending_mfa_user_id"] = user.id
+        return RedirectResponse(f"/mfa-verify?next={quote(str(form.get('next') or ''))}", status_code=303)
     auth.login(request, user)
     return RedirectResponse(_safe_next(str(form.get("next") or "")), status_code=303)
 
@@ -298,6 +303,38 @@ def confirm_email_resend(request: Request, db: Session = Depends(get_db)):
         return templates.TemplateResponse(request, "confirm_email.html",
                                           _ctx(request, on_login_page=True, email=user.email, errors=[str(exc)]), status_code=422)
     return RedirectResponse("/confirm-email?saved=1", status_code=303)
+
+
+# ---------------------------------------------------------------- two-factor login step
+
+def _pending_mfa_user(request: Request, db: Session) -> User | None:
+    user_id = request.session.get("pending_mfa_user_id")
+    return service.get_user(db, user_id) if user_id else None
+
+
+@router.get("/mfa-verify", response_class=HTMLResponse)
+def mfa_verify_page(request: Request, db: Session = Depends(get_db)):
+    user = _pending_mfa_user(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(request, "mfa_verify.html", _ctx(
+        request, on_login_page=True, next=request.query_params.get("next", "")))
+
+
+@router.post("/mfa-verify")
+async def mfa_verify_submit(request: Request, db: Session = Depends(get_db)):
+    user = _pending_mfa_user(request, db)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    form = await request.form()
+    code = str(form.get("code", "")).strip()
+    if not service.verify_mfa_code(user, code):
+        return templates.TemplateResponse(request, "mfa_verify.html", _ctx(
+            request, on_login_page=True, next=form.get("next", ""), errors=["Invalid authentication code."]),
+            status_code=422)
+    request.session.pop("pending_mfa_user_id", None)
+    auth.login(request, user)
+    return RedirectResponse(_safe_next(str(form.get("next") or "")), status_code=303)
 
 
 # ---------------------------------------------------------------- forgot / reset password
@@ -603,6 +640,37 @@ async def profile_password(request: Request, user: User = CurrentUser, db: Sessi
         errors = _errors(exc) if isinstance(exc, ValidationError) else [str(exc)]
         return templates.TemplateResponse(request, "profile.html", _profile_ctx(request, db, user, errors=errors), status_code=422)
     return RedirectResponse("/profile?saved=password", status_code=303)
+
+
+@router.get("/profile/mfa/setup", response_class=HTMLResponse)
+def mfa_setup_page(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
+    if user.mfa_enabled:
+        return RedirectResponse("/profile#mfa", status_code=303)
+    secret, uri = service.start_mfa_setup(db, user)
+    return templates.TemplateResponse(request, "mfa_setup.html",
+                                      _profile_ctx(request, db, user, secret=secret, qr=mfa.qr_data_uri(uri)))
+
+
+@router.post("/profile/mfa/setup")
+async def mfa_setup_confirm(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
+    form = await request.form()
+    try:
+        service.confirm_mfa_setup(db, user, str(form.get("code", "")))
+    except ValueError as exc:
+        uri = mfa.provisioning_uri(user.totp_secret, user.username)
+        return templates.TemplateResponse(request, "mfa_setup.html", _profile_ctx(
+            request, db, user, secret=user.totp_secret, qr=mfa.qr_data_uri(uri), errors=[str(exc)]), status_code=422)
+    return RedirectResponse("/profile?saved=mfa-enabled#mfa", status_code=303)
+
+
+@router.post("/profile/mfa/disable")
+async def mfa_disable(request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
+    form = await request.form()
+    try:
+        service.disable_mfa(db, user, str(form.get("current_password", "")))
+    except ValueError as exc:
+        return templates.TemplateResponse(request, "profile.html", _profile_ctx(request, db, user, errors=[str(exc)]), status_code=422)
+    return RedirectResponse("/profile?saved=mfa-disabled#mfa", status_code=303)
 
 
 def _address_from_form(form: FormData) -> AddressIn:

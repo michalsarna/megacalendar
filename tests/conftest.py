@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from megacalendar.main import app  # noqa: E402
 
 MASTER = ("master", "master")
+STRONG_PW = "Str0ng!Passw0rd"  # meets the 12-char + upper/lower/digit/special policy
 
 
 def code_from(body: str) -> str:
@@ -71,7 +72,7 @@ def make_user(client):
     """Create a user through the master API and return a fresh client logged in as that user."""
     created = []
 
-    def _make(username: str, password: str = "secret12", **fields):
+    def _make(username: str, password: str = STRONG_PW, **fields):
         contact = {"first_name": username.title(), "last_name": "Tester", "phone": "+48 500 000 000",
                    "email": f"{username}@example.com"}
         r = client.post("/api/users", json={"username": username, "password": password, **contact, **fields})

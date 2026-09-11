@@ -30,12 +30,28 @@
   <fieldset>
     <div class="row">
       <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
-      <label>New password <input name="new_password" type="password" required minlength="8" autocomplete="new-password"></label>
-      <label>Repeat new password <input name="confirm_password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label>New password <input name="new_password" type="password" required minlength="12" autocomplete="new-password"></label>
+      <label>Repeat new password <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
       <button type="submit">Change password</button>
     </div>
   </fieldset>
 </form>
+
+<h2 id="mfa">Two-factor authentication</h2>
+{% if user.mfa_enabled %}
+<p class="hint">Enabled: your account requires a 6-digit code from your authenticator app at login.</p>
+<form method="post" action="/profile/mfa/disable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <fieldset>
+    <div class="row">
+      <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
+      <button class="danger" type="submit">Disable two-factor authentication</button>
+    </div>
+  </fieldset>
+</form>
+{% else %}
+<p class="hint">Not enabled. Add a second factor (Google Authenticator or similar) to protect this account.</p>
+<a class="btn" href="/profile/mfa/setup">Set up two-factor authentication</a>
+{% endif %}
 
 <h2 id="addresses">Delivery addresses</h2>
 {% macro address_fields(a) %}

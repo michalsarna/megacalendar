@@ -7,7 +7,7 @@ import holidays
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
-from . import auth, config, service
+from . import auth, config, mfa, service
 from .db import get_db
 from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
@@ -16,9 +16,10 @@ from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
 from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, ConfirmEmailIn, DayOverrideIn,
-                      DayOverrideRead, ForgotPasswordIn, LoginIn, MailSettingsRead, MailSettingsUpdate, MeRead, Meta,
-                      PasswordChange, ProfileUpdate, ProjectCreate, ProjectRead, ProjectUpdate, RegisterIn, ResetPasswordIn,
-                      ThemeUpdate, UserCreate, UserRead, UserUpdate)
+                      DayOverrideRead, ForgotPasswordIn, LoginIn, MailSettingsRead, MailSettingsUpdate, MeRead,
+                      MfaCodeIn, MfaDisableIn, MfaSetupRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate,
+                      ProjectRead, ProjectUpdate, RegisterIn, ResetPasswordIn, ThemeUpdate, UserCreate, UserRead,
+                      UserUpdate)
 
 router = APIRouter(prefix="/api", tags=["api"], dependencies=[Depends(verify_csrf)])
 CurrentUser = Depends(auth.current_user_api)
@@ -34,6 +35,11 @@ def _project_or_404(db: Session, project_id: int, user: User) -> Project:
 
 def _pending_confirm_user(request: Request, db: Session) -> User | None:
     user_id = request.session.get("pending_confirm_user_id") if "session" in request.scope else None
+    return service.get_user(db, user_id) if user_id else None
+
+
+def _pending_mfa_user(request: Request, db: Session) -> User | None:
+    user_id = request.session.get("pending_mfa_user_id") if "session" in request.scope else None
     return service.get_user(db, user_id) if user_id else None
 
 
@@ -66,6 +72,21 @@ def api_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     if not user.email_verified:
         request.session["pending_confirm_user_id"] = user.id
         raise HTTPException(403, "email address not confirmed yet; use /auth/confirm-email or /auth/resend-confirmation")
+    if user.mfa_enabled:
+        request.session["pending_mfa_user_id"] = user.id
+        raise HTTPException(401, "authentication code required; use /auth/mfa-verify")
+    auth.login(request, user)
+    return _me_read(db, user, request)
+
+
+@router.post("/auth/mfa-verify", response_model=MeRead)
+def api_mfa_verify(data: MfaCodeIn, request: Request, db: Session = Depends(get_db)):
+    user = _pending_mfa_user(request, db)
+    if user is None:
+        raise HTTPException(400, "no pending MFA verification for this session")
+    if not service.verify_mfa_code(user, data.code):
+        raise HTTPException(422, "invalid authentication code")
+    request.session.pop("pending_mfa_user_id", None)
     auth.login(request, user)
     return _me_read(db, user, request)
 
@@ -152,6 +173,30 @@ def update_theme(data: ThemeUpdate, user: User = CurrentUser, db: Session = Depe
 def change_password(data: PasswordChange, user: User = CurrentUser, db: Session = Depends(get_db)):
     try:
         service.change_password(db, user, data)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/me/mfa/setup", response_model=MfaSetupRead)
+def start_mfa_setup(user: User = CurrentUser, db: Session = Depends(get_db)):
+    secret, uri = service.start_mfa_setup(db, user)
+    return MfaSetupRead(secret=secret, otpauth_url=uri, qr_data_uri=mfa.qr_data_uri(uri))
+
+
+@router.post("/me/mfa/confirm", status_code=204)
+def confirm_mfa_setup(data: MfaCodeIn, user: User = CurrentUser, db: Session = Depends(get_db)):
+    try:
+        service.confirm_mfa_setup(db, user, data.code)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.post("/me/mfa/disable", status_code=204)
+def disable_mfa(data: MfaDisableIn, user: User = CurrentUser, db: Session = Depends(get_db)):
+    try:
+        service.disable_mfa(db, user, data.current_password)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return Response(status_code=204)
