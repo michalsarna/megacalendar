@@ -5,7 +5,7 @@ from tests.conftest import MASTER, STRONG_PW, csrf_of, login
 def test_landing_and_login_flow(anon):
     page = anon.get("/").text
     assert 'href="/login"' in page and "Print-ready wall calendars" in page and "Log out" not in page
-    assert "megacalendar by DeerTeam · Copyright 2026" in page
+    assert "megacalendar by DeerTeam · Claude made it in 2026" in page
     login_page = anon.get("/login").text
     assert 'class="login-box"' in login_page and 'href="/login"' not in login_page  # no Log in button on the login page itself
     # protected pages redirect to the login page and come back afterwards
@@ -18,7 +18,7 @@ def test_landing_and_login_flow(anon):
     assert r.status_code == 303 and r.headers["location"] == "/projects"
     page = anon.get("/projects").text
     assert "My year calendars" in page and 'class="logout"' in page and "master" in page
-    assert "megacalendar by DeerTeam · Copyright 2026" in page
+    assert "megacalendar by DeerTeam · Claude made it in 2026" in page
     assert "still uses the default password" in page  # warning until the master password is changed
     assert anon.get("/login", follow_redirects=False).status_code == 303  # already logged in
     # open redirects are not followed

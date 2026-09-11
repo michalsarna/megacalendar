@@ -38,7 +38,7 @@
   {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
   {% block content %}{% endblock %}
 </main>
-<footer class="site-footer">megacalendar by DeerTeam · Copyright 2026</footer>
+<footer class="site-footer">megacalendar by DeerTeam · Claude made it in 2026</footer>
 <script>
 // ---- Theme toggle: cycles System -> Light -> Dark -> System. "System" (no stored preference)
 // follows prefers-color-scheme live, including while this tab stays open across an OS theme switch.
@@ -70,6 +70,27 @@
   };
   setVisual(current());
   btn.addEventListener("click", () => apply(NEXT[current()]));
+})();
+
+// ---- Phone fields: a country-code picker next to the number, purely as a convenience for
+// filling in / swapping the leading "+code" — the number input still holds the full value posted.
+(() => {
+  document.querySelectorAll(".phone-field").forEach(field => {
+    const select = field.querySelector(".phone-cc");
+    const input = field.querySelector(".phone-number");
+    if (!select || !input) return;
+    const codes = [...select.options].map(o => o.value).filter(Boolean).sort((a, b) => b.length - a.length);
+    const sync = () => { select.value = codes.find(c => input.value === c || input.value.startsWith(c + " ")) || ""; };
+    select.addEventListener("change", () => {
+      if (!select.value) return;
+      const rest = input.value.replace(/^\+\d{1,4}\s*/, "");
+      input.value = rest ? `${select.value} ${rest}` : `${select.value} `;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+    input.addEventListener("input", sync);
+    sync();
+  });
 })();
 </script>
 </body>

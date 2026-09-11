@@ -1,0 +1,13 @@
+{#- Shared macros, imported by templates that need them (e.g. {% from "_macros.html" import phone_field %}). -#}
+{% macro phone_field(name, value, required=False, label="Phone") %}
+<label class="phone-field">{{ label }}
+  <span class="phone-field-row">
+    <select class="phone-cc" aria-label="Country code">
+      <option value="">code</option>
+      {% for code, country_label in phone_country_codes %}<option value="{{ code }}">{{ country_label }}</option>{% endfor %}
+    </select>
+    <input name="{{ name }}" class="phone-number" type="tel" {% if required %}required{% endif %} maxlength="50"
+          value="{{ value or '' }}" placeholder="+1 555 0100">
+  </span>
+</label>
+{% endmacro %}

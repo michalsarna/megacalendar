@@ -142,6 +142,22 @@ def country_choices() -> list[str]:
 
 
 @lru_cache(maxsize=1)
+def phone_country_choices() -> list[tuple[str, str]]:
+    """("+dial code", "Country name (+code)") for every region phonenumbers knows, sorted by name;
+    used by the country-code picker next to phone number fields (the field itself still holds the
+    full international number, the picker just fills in / swaps the leading "+code")."""
+    territories = Locale.parse("en").territories
+    out = []
+    for region in phonenumbers.SUPPORTED_REGIONS:
+        name = territories.get(region)
+        code = phonenumbers.country_code_for_region(region)
+        if not name or not code:
+            continue
+        out.append((f"+{code}", f"{name} (+{code})"))
+    return sorted(out, key=lambda t: t[1].lower())
+
+
+@lru_cache(maxsize=1)
 def language_choices() -> list[tuple[str, str]]:
     """(locale id, display name) for every language Babel knows, without territory variants."""
     out = []
