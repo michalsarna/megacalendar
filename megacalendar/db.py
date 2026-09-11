@@ -56,6 +56,12 @@ def _add_missing_columns() -> None:
                 if not column.nullable and column.server_default is None:
                     raise RuntimeError(f"cannot add NOT NULL column {table.name}.{column.name} without a server_default")
                 conn.execute(text(ddl))
+                if table.name == "projects" and column.name in ("day_number_valign", "day_name_valign"):
+                    # Existing one-month calendars relied on a non-centre day_number_align implying
+                    # a top-corner vertical position; the two are now independent settings, so give
+                    # them the explicit "top" that preserves their old look instead of the generic
+                    # "middle" server_default (which would silently recentre their day numbers).
+                    conn.execute(text(f"UPDATE projects SET {column.name} = 'top' WHERE kind = 'month'"))
 
 
 def _bootstrap_users() -> None:

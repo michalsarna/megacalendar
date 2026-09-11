@@ -97,6 +97,8 @@ class Project(Base):
     day_names_uppercase: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=false())
     day_number_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")
     day_number_align: Mapped[str] = mapped_column(String(10), default="center", nullable=False, server_default="center")
+    day_number_valign: Mapped[str] = mapped_column(String(10), default="middle", nullable=False, server_default="middle")
+    day_name_valign: Mapped[str] = mapped_column(String(10), default="middle", nullable=False, server_default="middle")
     # Per-element typography; font None = font_family
     title_font: Mapped[str | None] = mapped_column(String(100))
     title_scale: Mapped[float] = mapped_column(Float, default=100.0, nullable=False, server_default="100")

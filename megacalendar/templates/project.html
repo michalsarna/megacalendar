@@ -174,10 +174,10 @@
       <div class="field"><span>Day numbers colour</span>{{ color("day_number_color", project.day_number_color) }}</div>
       <label>Day numbers font {{ font_select("day_number_font", project.day_number_font, "1 2 3 14 31") }}</label>
       <label>Day number size (%) <input name="day_number_scale" type="number" min="10" max="300" step="5" value="{{ project.day_number_scale|int }}" title="% of the automatic size"></label>
-      {% if is_month %}
-      <label>Day number position
+      <label>Day number horizontal position
         <select name="day_number_align">{% for a in ["left", "center", "right"] %}<option value="{{ a }}" {% if a == project.day_number_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      {% else %}<input type="hidden" name="day_number_align" value="{{ project.day_number_align }}">{% endif %}
+      <label>Day number vertical position
+        <select name="day_number_valign">{% for a in ["top", "middle", "bottom"] %}<option value="{{ a }}" {% if a == project.day_number_valign %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
       <div class="field"><span>Week numbers colour</span>{{ color("week_number_color", project.week_number_color) }}</div>
       <label>Week number size (%) {{ scale("week_number_scale", project.week_number_scale) }}</label>
     </div>
@@ -188,6 +188,8 @@
       <div class="field{% if day_names_off %} dimmed{% endif %}" data-dayname="all"{% if day_names_off %} inert{% endif %}><span>Day names colour</span>{{ color("day_name_color", project.day_name_color) }}</div>
       <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names font {{ font_select("day_name_font", project.day_name_font, "Mon Tue Wed") }}</label>
       <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names size (%) {{ scale("day_name_scale", project.day_name_scale) }}</label>
+      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names vertical position
+        <select name="day_name_valign">{% for a in ["top", "middle", "bottom"] %}<option value="{{ a }}" {% if a == project.day_name_valign %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
       <label class="inline" data-dayname="all"{% if day_names_off %} inert{% endif %}><input type="checkbox" name="day_names_uppercase" {% if project.day_names_uppercase %}checked{% endif %}> DAY NAMES in upper case</label>
     </div>
     <div class="row" style="margin-top:.8rem">

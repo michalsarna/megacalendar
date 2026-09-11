@@ -85,6 +85,8 @@ def _parse_project_form(form: FormData) -> dict:
         "show_title": form.get("show_title") is not None,
         "show_year": form.get("show_year") is not None,
         "day_number_align": form.get("day_number_align"),
+        "day_number_valign": form.get("day_number_valign"),
+        "day_name_valign": form.get("day_name_valign"),
         "year_align": form.get("year_align"),
         "show_legend": form.get("show_legend") is not None,
         "month_gap_mm": form.get("month_gap_mm") or None,
@@ -107,7 +109,7 @@ def _parse_project_form(form: FormData) -> dict:
     for key in ("year", "page_size", "orientation", "margin_mm", "locale", "week_start", "font_family",
                 "background_mode", "month_border_width_mm", "color_mode", "background_opacity", "title_align", "layout",
                 "day_number_scale", "day_border_width_mm", "year_align", "logo_align", "logo_opacity", "day_number_align",
-                *SCALE_FIELDS):
+                "day_number_valign", "day_name_valign", *SCALE_FIELDS):
         if data[key] is None:
             del data[key]
     return data
