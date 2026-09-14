@@ -197,6 +197,12 @@ def landing(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request, "landing.html", _ctx(request, user=user))
 
 
+@router.get("/cookies", response_class=HTMLResponse)
+def cookies_page(request: Request, db: Session = Depends(get_db)):
+    user = auth.user_from_request(request, db)
+    return templates.TemplateResponse(request, "cookies.html", _ctx(request, user=user))
+
+
 @router.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, db: Session = Depends(get_db)):
     if auth.user_from_request(request, db) is not None:

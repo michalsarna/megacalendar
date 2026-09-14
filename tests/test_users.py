@@ -2,6 +2,15 @@
 from tests.conftest import MASTER, STRONG_PW, csrf_of, login
 
 
+def test_cookie_notice_and_policy_page(anon):
+    page = anon.get("/").text
+    assert 'id="cookie-notice"' in page and 'href="/cookies"' in page
+    assert "<noscript>" in page and "essential cookie" in page
+    r = anon.get("/cookies")
+    assert r.status_code == 200
+    assert "megacalendar_session" in r.text and "Strictly necessary" in r.text
+
+
 def test_landing_and_login_flow(anon):
     page = anon.get("/").text
     assert 'href="/login"' in page and "Print-ready wall calendars" in page and "Log out" not in page

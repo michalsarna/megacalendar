@@ -38,7 +38,15 @@
   {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
   {% block content %}{% endblock %}
 </main>
-<footer class="site-footer">megacalendar by DeerTeam · Claude made it in 2026</footer>
+<footer class="site-footer">megacalendar by DeerTeam · Claude made it in 2026 · <a href="/cookies">Cookies</a></footer>
+<div id="cookie-notice" class="cookie-notice" hidden>
+  <p>This site uses one essential cookie to keep you logged in and protect your forms from cross-site
+    request forgery. No tracking or advertising cookies are used. <a href="/cookies">Learn more</a>.</p>
+  <button type="button" id="cookie-notice-ok" class="primary">Got it</button>
+</div>
+<noscript><div class="cookie-notice">This site uses one essential cookie to keep you logged in and protect
+  your forms from cross-site request forgery. No tracking or advertising cookies are used.
+  <a href="/cookies">Learn more</a>.</div></noscript>
 <script>
 // ---- Theme toggle: cycles System -> Light -> Dark -> System. "System" (no stored preference)
 // follows prefers-color-scheme live, including while this tab stays open across an OS theme switch.
@@ -84,6 +92,18 @@
     select.addEventListener("change", sync);
     number.addEventListener("input", sync);
     sync();
+  });
+})();
+
+// ---- Cookie notice: shown once per browser (localStorage, not another cookie) until dismissed.
+(() => {
+  const KEY = "cookie-notice-ack";
+  const banner = document.getElementById("cookie-notice");
+  if (!banner) return;
+  if (!localStorage.getItem(KEY)) banner.hidden = false;
+  document.getElementById("cookie-notice-ok").addEventListener("click", () => {
+    localStorage.setItem(KEY, "1");
+    banner.hidden = true;
   });
 })();
 </script>

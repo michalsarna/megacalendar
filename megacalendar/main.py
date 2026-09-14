@@ -24,7 +24,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="megacalendar", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="megacalendar", version="0.6.0", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=secret_key(), session_cookie="megacalendar_session",
                    same_site="lax", max_age=14 * 24 * 3600,
                    https_only=os.environ.get("MEGACALENDAR_HTTPS", "").lower() in ("1", "true", "yes"))

@@ -131,7 +131,10 @@ directory). Deleting a user removes their projects and uploaded files.
   mail settings) rejects control characters and `<`/`>` as defense in depth against injection, on top of
   Jinja2's automatic output escaping and the ORM's parameterised queries.
 - Sessions are signed cookies (`SameSite=Lax`, 14 days). Set `MEGACALENDAR_HTTPS=1` behind TLS so the
-  cookie is marked `Secure`, and `MEGACALENDAR_SECRET_KEY` to pin the signing secret.
+  cookie is marked `Secure`, and `MEGACALENDAR_SECRET_KEY` to pin the signing secret. It's the only
+  cookie the site sets (no analytics/advertising/tracking); a GDPR-facing cookie notice is shown to
+  first-time visitors (`base.html`, dismissal remembered in `localStorage`, not another cookie) linking
+  to the full policy at `/cookies`.
 - CSRF: every state-changing request made with the session cookie must carry the session's token,
   either as the hidden `csrf_token` form field (all HTML forms) or the `X-CSRF-Token` header (the
   editor's autosave). API clients logging in via `POST /api/auth/login` receive the token in the
