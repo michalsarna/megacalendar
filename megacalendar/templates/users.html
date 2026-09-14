@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Users · megacalendar{% endblock %}
+{% block title %}{{ _("Users") }} · megacalendar{% endblock %}
 {% block content %}
-{% if saved %}<div class="ok">User {{ saved }}.</div>{% endif %}
+{% if saved %}<div class="ok">{{ _("User {status}.", status=saved) }}</div>{% endif %}
 <div class="page-head">
-  <h2>Users</h2>
-  <a class="btn primary" href="/users/new">+ Create user</a>
+  <h2>{{ _("Users") }}</h2>
+  <a class="btn primary" href="/users/new">{{ _("+ Create user") }}</a>
 </div>
 <table class="users">
-  <thead><tr><th>User</th><th>Name</th><th>Contact</th><th>Year calendars</th><th>Limit</th><th>One-month</th><th>Limit</th><th>Active</th><th>New password</th><th></th></tr></thead>
+  <thead><tr><th>{{ _("User") }}</th><th>{{ _("Name") }}</th><th>{{ _("Contact") }}</th><th>{{ _("Year calendars") }}</th><th>{{ _("Limit") }}</th><th>{{ _("One-month") }}</th><th>{{ _("Limit") }}</th><th>{{ _("Active") }}</th><th>{{ _("New password") }}</th><th></th></tr></thead>
   <tbody>
   {% for u in users %}
     <tr>
@@ -17,28 +17,28 @@
         <input type="hidden" name="phone" value="{{ u.phone or '' }}">
         <input type="hidden" name="email" value="{{ u.email or '' }}">
       </form>
-      <td><strong>{{ u.username }}</strong>{% if u.is_master %} <span class="hint">master</span>{% endif %}</td>
+      <td><strong>{{ u.username }}</strong>{% if u.is_master %} <span class="hint">{{ _("master") }}</span>{% endif %}</td>
       <td>{{ u.display_name if (u.first_name or u.last_name) else "—" }}</td>
       <td>{% if u.email %}<a href="mailto:{{ u.email }}">{{ u.email }}</a>{% endif %}{% if u.email and u.phone %}<br>{% endif %}{{ u.phone or "" }}{% if not u.email and not u.phone %}—{% endif %}</td>
       <td>{{ counts.get(u.id, 0) }}</td>
-      <td>{% if u.is_master %}unlimited{% else %}<input form="user-{{ u.id }}" name="project_limit" type="number" min="0" value="{{ u.project_limit if u.project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
+      <td>{% if u.is_master %}{{ _("unlimited") }}{% else %}<input form="user-{{ u.id }}" name="project_limit" type="number" min="0" value="{{ u.project_limit if u.project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
       <td>{{ small_counts.get(u.id, 0) }}</td>
-      <td>{% if u.is_master %}unlimited{% else %}<input form="user-{{ u.id }}" name="small_project_limit" type="number" min="0" value="{{ u.small_project_limit if u.small_project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
-      <td>{% if u.is_master %}yes{% else %}<input form="user-{{ u.id }}" type="checkbox" name="is_active" {% if u.is_active %}checked{% endif %}>{% endif %}</td>
-      <td><input form="user-{{ u.id }}" name="password" type="password" minlength="12" placeholder="leave blank to keep" autocomplete="new-password" style="width:9rem"></td>
+      <td>{% if u.is_master %}{{ _("unlimited") }}{% else %}<input form="user-{{ u.id }}" name="small_project_limit" type="number" min="0" value="{{ u.small_project_limit if u.small_project_limit is not none else '' }}" placeholder="∞" style="width:4.5rem">{% endif %}</td>
+      <td>{% if u.is_master %}{{ _("yes") }}{% else %}<input form="user-{{ u.id }}" type="checkbox" name="is_active" {% if u.is_active %}checked{% endif %}>{% endif %}</td>
+      <td><input form="user-{{ u.id }}" name="password" type="password" minlength="12" placeholder="{{ _('leave blank to keep') }}" autocomplete="new-password" style="width:9rem"></td>
       <td class="row-actions">
-        <button form="user-{{ u.id }}" type="submit" class="save-btn">Save</button>
+        <button form="user-{{ u.id }}" type="submit" class="save-btn">{{ _("Save") }}</button>
         {% if not u.is_master %}
-        <form method="post" action="/users/{{ u.id }}/delete" onsubmit="return confirm('Delete user “{{ u.username }}” with all their projects and files?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Delete</button></form>
+        <form method="post" action="/users/{{ u.id }}/delete" onsubmit="return confirm('{{ _('Delete user “{name}” with all their projects and files?', name=u.username) }}')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">{{ _("Delete") }}</button></form>
         {% endif %}
       </td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
-<p class="hint">The master user sets how many year calendars and one-month calendars each user may have (blank = unlimited), deactivates accounts and resets passwords. Users edit their own name and contact details in their profile. Deleting a user removes their projects and uploaded files.</p>
+<p class="hint">{{ _("The master user sets how many year calendars and one-month calendars each user may have (blank = unlimited), deactivates accounts and resets passwords. Users edit their own name and contact details in their profile. Deleting a user removes their projects and uploaded files.") }}</p>
 <div class="actions bottom">
-  <button type="button" id="save-all">Save all changes</button>
+  <button type="button" id="save-all" data-t-none="{{ _('No changes to save.') }}" data-t-saving="{{ _('Saving {n}…') }}">{{ _("Save all changes") }}</button>
   <span id="save-all-status" class="hint"></span>
 </div>
 <script>
@@ -59,9 +59,9 @@
   const status = document.getElementById("save-all-status");
   saveAll.addEventListener("click", async () => {
     const forms = [...table.querySelectorAll('form[data-dirty="1"]')];
-    if (!forms.length) { status.textContent = "No changes to save."; return; }
+    if (!forms.length) { status.textContent = saveAll.dataset.tNone; return; }
     saveAll.disabled = true;
-    status.textContent = `Saving ${forms.length}…`;
+    status.textContent = saveAll.dataset.tSaving.replace("{n}", forms.length);
     for (const form of forms) {
       await fetch(form.action, { method: "POST", body: new FormData(form) });
     }

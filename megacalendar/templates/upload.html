@@ -1,25 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Upload · {{ project.name }} · megacalendar{% endblock %}
+{% block title %}{{ _("Upload") }} · {{ project.name }} · megacalendar{% endblock %}
 {% block content %}
-<h2>Upload a file for “{{ project.name }}”</h2>
+<h2>{{ _("Upload a file for “{name}”", name=project.name) }}</h2>
 <form method="post" action="/projects/{{ project.id }}/upload" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
-      <label>SVG, PNG or JPEG <input type="file" name="file" accept=".svg,.png,.jpg,.jpeg" required autofocus></label>
-      <label>Use as
+      <label>{{ _("SVG, PNG or JPEG") }} <input type="file" name="file" accept=".svg,.png,.jpg,.jpeg" required autofocus></label>
+      <label>{{ _("Use as") }}
         <select name="purpose">
-          <option value="background" {% if purpose == "background" %}selected{% endif %}>Background artwork (whole sheet)</option>
-          <option value="logo" {% if purpose == "logo" %}selected{% endif %}>Logo next to the title</option>
+          <option value="background" {% if purpose == "background" %}selected{% endif %}>{{ _("Background artwork (whole sheet)") }}</option>
+          <option value="logo" {% if purpose == "logo" %}selected{% endif %}>{{ _("Logo next to the title") }}</option>
         </select></label>
     </div>
   </fieldset>
   <div class="actions">
-    <button class="primary" type="submit">Upload and use in this project</button>
-    <a class="btn" href="/projects/{{ project.id }}#background">Back to project</a>
+    <button class="primary" type="submit">{{ _("Upload and use in this project") }}</button>
+    <a class="btn" href="/projects/{{ project.id }}#background">{{ _("Back to project") }}</a>
   </div>
 </form>
-<p class="hint">Uploaded files are kept on the server in the shared library and can be reused by any project.
-In CMYK projects SVG colours are converted to CMYK vectors and rasters are re-encoded as CMYK JPEG (supply a CMYK JPEG
-to keep your own separation; transparency is flattened onto white). In RGB projects artwork is embedded as-is,
-including PNG transparency.</p>
+<p class="hint">{{ _("Uploaded files are kept on the server in the shared library and can be reused by any project. In CMYK projects SVG colours are converted to CMYK vectors and rasters are re-encoded as CMYK JPEG (supply a CMYK JPEG to keep your own separation; transparency is flattened onto white). In RGB projects artwork is embedded as-is, including PNG transparency.") }}</p>
 {% endblock %}

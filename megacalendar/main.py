@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import api, web
+from . import api, i18n, web
 from .auth import LoginRequired, secret_key
 from .config import FONT_DIR
 from .db import init_db
@@ -24,7 +24,19 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="megacalendar", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="megacalendar", version="0.7.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def _set_ui_language(request: Request, call_next):
+    """Runs inside SessionMiddleware (registered before it below) so request.session is already
+    available: the session's "lang" already reflects the signed-in user's saved preference (kept
+    in sync by auth.login() and the language-picker routes), so this never needs a DB lookup."""
+    lang = request.session.get("lang") or i18n.best_match(request.headers.get("accept-language"))
+    i18n.set_language(lang or i18n.DEFAULT_LANGUAGE)
+    return await call_next(request)
+
+
 app.add_middleware(SessionMiddleware, secret_key=secret_key(), session_cookie="megacalendar_session",
                    same_site="lax", max_age=14 * 24 * 3600,
                    https_only=os.environ.get("MEGACALENDAR_HTTPS", "").lower() in ("1", "true", "yes"))

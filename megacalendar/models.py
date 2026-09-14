@@ -30,6 +30,7 @@ class User(Base):
     email: Mapped[str | None] = mapped_column(String(200))
     locale: Mapped[str] = mapped_column(String(20), default="en", nullable=False, server_default="en")  # default calendar language
     theme: Mapped[str] = mapped_column(String(10), default="system", nullable=False, server_default="system")  # "system" | "light" | "dark"
+    ui_language: Mapped[str | None] = mapped_column(String(10))  # website UI language; None = auto-detect
 
     # Self-registered accounts must confirm their email before they can log in; accounts created by
     # the master (or pre-existing rows, via the server_default) are trusted and start out verified.

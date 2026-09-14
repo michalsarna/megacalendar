@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
-from . import auth, config, mfa, service
+from . import auth, config, i18n, mfa, service
 from .db import get_db
 from .security import csrf_token, login_throttle, verify_csrf
 from .models import Project, User
@@ -47,6 +47,7 @@ def to_hex(color: dict | None) -> str:
 
 templates.env.globals["to_hex"] = to_hex
 templates.env.globals["split_phone_number"] = split_phone_number
+templates.env.globals["_"] = i18n.t
 
 
 def _form_color_mode(form: FormData) -> str:
@@ -117,7 +118,17 @@ def _parse_project_form(form: FormData) -> dict:
 
 
 def _errors(exc: ValidationError) -> list[str]:
-    return [f"{'.'.join(str(p) for p in e['loc']) or 'form'}: {e['msg']}" for e in exc.errors()]
+    """Pydantic's own "Value error, " prefix (always English) is stripped: our custom validators
+    already translate their own message at raise time via i18n.t(), so the text after the prefix
+    is already in the visitor's language and doesn't need — or want — a second translation pass."""
+    out = []
+    for e in exc.errors():
+        field = ".".join(str(p) for p in e["loc"]) or "form"
+        msg = e["msg"]
+        if msg.startswith("Value error, "):
+            msg = msg[len("Value error, "):]
+        out.append(f"{field}: {msg}")
+    return out
 
 
 def _ctx(request: Request, **extra):
@@ -140,6 +151,8 @@ def _ctx(request: Request, **extra):
         "languages": language_choices(),
         "country_names": country_choices(),
         "phone_country_codes": phone_country_choices(),
+        "ui_languages": i18n.LANGUAGES,
+        "current_ui_language": i18n.get_language(),
         "title_aligns": TITLE_ALIGNS,
         "fonts": available_families(),
         "max_margin_mm": config.MAX_MARGIN_MM,
@@ -182,7 +195,7 @@ def _parse_day(form: FormData, year: int) -> date:
         month, dom = int(form.get("month") or 0), int(form.get("day_of_month") or 0)
         return date(year, month, dom)
     except ValueError as exc:
-        raise ValueError(f"invalid date: {exc}") from exc
+        raise ValueError(i18n.t("invalid date: {error}", error=exc)) from exc
 
 
 CurrentUser = Depends(auth.current_user_web)
@@ -219,7 +232,7 @@ async def login_submit(request: Request, db: Session = Depends(get_db)):
     if user is None:
         login_throttle.failure(request, username)
         return templates.TemplateResponse(
-            request, "login.html", _ctx(request, next=form.get("next", ""), errors=["Wrong username or password."],
+            request, "login.html", _ctx(request, next=form.get("next", ""), errors=[i18n.t("Wrong username or password.")],
                                        username=username, on_login_page=True), status_code=401)
     login_throttle.success(request, username)
     if not user.email_verified:
@@ -240,6 +253,26 @@ def logout_submit(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
+@router.post("/language")
+async def set_language(request: Request, db: Session = Depends(get_db)):
+    """Works signed out or in: always updates the session (so the next render uses it), and also
+    saves it to the profile when a user is logged in (so it follows them to another browser).
+    Unlike login's _safe_next, an invalid "next" falls back to "/" — this route is reachable
+    from public pages too, and "/projects" would just bounce an anonymous visitor straight back
+    to the login page."""
+    form = await request.form()
+    lang = str(form.get("language", ""))
+    if lang in i18n.LANGUAGE_CODES:
+        request.session["lang"] = lang
+        user = auth.user_from_request(request, db)
+        if user is not None:
+            service.update_ui_language(db, user, lang)
+    next_url = str(form.get("next") or "")
+    if not (next_url.startswith("/") and not next_url.startswith("//")):
+        next_url = "/"
+    return RedirectResponse(next_url, status_code=303)
+
+
 @router.get("/register", response_class=HTMLResponse)
 def register_page(request: Request, db: Session = Depends(get_db)):
     if auth.user_from_request(request, db) is not None:
@@ -253,7 +286,7 @@ async def register_submit(request: Request, db: Session = Depends(get_db)):
     values = {k: str(form.get(k, "")) for k in ("username", "first_name", "last_name", "phone", "email", "locale")}
     try:
         if form.get("password") != form.get("confirm_password"):
-            raise ValueError("the passwords do not match")
+            raise ValueError(i18n.t("the passwords do not match"))
         data = RegisterIn(password=str(form.get("password", "")), **{k: v or None for k, v in values.items() if k != "locale"},
                           locale=values["locale"] or "en")
         user = service.register_user(db, data)
@@ -338,7 +371,7 @@ async def mfa_verify_submit(request: Request, db: Session = Depends(get_db)):
     code = str(form.get("code", "")).strip()
     if not service.verify_mfa_code(user, code):
         return templates.TemplateResponse(request, "mfa_verify.html", _ctx(
-            request, on_login_page=True, next=form.get("next", ""), errors=["Invalid authentication code."]),
+            request, on_login_page=True, next=form.get("next", ""), errors=[i18n.t("Invalid authentication code.")]),
             status_code=422)
     request.session.pop("pending_mfa_user_id", None)
     auth.login(request, user)
@@ -378,7 +411,7 @@ async def reset_password_submit(request: Request, db: Session = Depends(get_db))
     identifier = str(form.get("identifier", "")).strip()
     try:
         if form.get("new_password") != form.get("confirm_password"):
-            raise ValueError("the passwords do not match")
+            raise ValueError(i18n.t("the passwords do not match"))
         data = ResetPasswordIn(identifier=identifier, code=str(form.get("code", "")),
                                new_password=str(form.get("new_password", "")))
         service.reset_password(db, data.identifier, data.code, data.new_password)
@@ -641,7 +674,7 @@ async def profile_password(request: Request, user: User = CurrentUser, db: Sessi
     form = await request.form()
     try:
         if form.get("new_password") != form.get("confirm_password"):
-            raise ValueError("the new passwords do not match")
+            raise ValueError(i18n.t("the new passwords do not match"))
         service.change_password(db, user, PasswordChange(current_password=str(form.get("current_password", "")),
                                                           new_password=str(form.get("new_password", ""))))
     except (ValidationError, ValueError) as exc:
@@ -817,7 +850,7 @@ async def mail_settings_test(request: Request, user: User = Master, db: Session 
     try:
         to_email = str(form.get("test_email") or "").strip()
         if not to_email:
-            raise ValueError("enter an address to send the test email to")
+            raise ValueError(i18n.t("enter an address to send the test email to"))
         service.send_test_email(db, to_email)
     except ValueError as exc:
         return templates.TemplateResponse(request, "mail_settings.html",

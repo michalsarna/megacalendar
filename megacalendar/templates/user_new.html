@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% from "_macros.html" import phone_field with context %}
-{% block title %}Create user · megacalendar{% endblock %}
+{% block title %}{{ _("Create user") }} · megacalendar{% endblock %}
 {% block content %}
 {% set v = values or {} %}
-<h2>Create user</h2>
+<h2>{{ _("Create user") }}</h2>
 <form method="post" action="/users"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
-    <legend>Account</legend>
+    <legend>{{ _("Account") }}</legend>
     <div class="row">
-      <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus></label>
-      <label>Password (min. 12, upper+lower+digit+special) <input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
-      <label>Year calendars (blank = unlimited) <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
-      <label>One-month calendars (blank = unlimited) <input name="small_project_limit" type="number" min="0" value="{{ v.get('small_project_limit', 2) }}"></label>
+      <label>{{ _("Username") }} <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus></label>
+      <label>{{ _("Password (min. 12, upper+lower+digit+special)") }} <input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
+      <label>{{ _("Year calendars (blank = unlimited)") }} <input name="project_limit" type="number" min="0" value="{{ v.get('project_limit', 1) }}"></label>
+      <label>{{ _("One-month calendars (blank = unlimited)") }} <input name="small_project_limit" type="number" min="0" value="{{ v.get('small_project_limit', 2) }}"></label>
     </div>
   </fieldset>
   <fieldset>
-    <legend>Contact (required)</legend>
+    <legend>{{ _("Contact (required)") }}</legend>
     <div class="row">
-      <label>Name <input name="first_name" required maxlength="100" value="{{ v.get('first_name', '') }}"></label>
-      <label>Surname <input name="last_name" required maxlength="100" value="{{ v.get('last_name', '') }}"></label>
+      <label>{{ _("Name") }} <input name="first_name" required maxlength="100" value="{{ v.get('first_name', '') }}"></label>
+      <label>{{ _("Surname") }} <input name="last_name" required maxlength="100" value="{{ v.get('last_name', '') }}"></label>
       {{ phone_field("phone", v.get('phone', ''), required=True) }}
-      <label>Email <input name="email" type="email" required maxlength="200" value="{{ v.get('email', '') }}"></label>
+      <label>{{ _("Email") }} <input name="email" type="email" required maxlength="200" value="{{ v.get('email', '') }}"></label>
     </div>
   </fieldset>
   <div class="actions">
-    <button class="primary" type="submit">Create user</button>
-    <a class="btn" href="/users">Cancel</a>
+    <button class="primary" type="submit">{{ _("Create user") }}</button>
+    <a class="btn" href="/users">{{ _("Cancel") }}</a>
   </div>
 </form>
 {% endblock %}

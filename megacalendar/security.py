@@ -8,6 +8,8 @@ from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request
 
+from .i18n import t as _
+
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 CSRF_SESSION_KEY = "csrf"
 CSRF_HEADER = "x-csrf-token"
@@ -46,7 +48,7 @@ async def verify_csrf(request: Request) -> None:
             form = await request.form()  # cached; the route can read it again
             supplied = form.get(CSRF_FIELD)
     if not expected or not supplied or not hmac.compare_digest(str(expected), str(supplied)):
-        raise HTTPException(403, "CSRF token missing or invalid; reload the page and try again")
+        raise HTTPException(403, _("CSRF token missing or invalid; reload the page and try again"))
 
 
 # ---------------------------------------------------------------- login throttling
@@ -75,7 +77,7 @@ class LoginThrottle:
         self._prune(attempts)
         if len(attempts) >= self.max_failures:
             retry = int(self.window - (time.monotonic() - attempts[0])) + 1
-            raise HTTPException(429, f"too many failed logins; try again in {retry} seconds",
+            raise HTTPException(429, _("too many failed logins; try again in {retry} seconds", retry=retry),
                                 headers={"Retry-After": str(retry)})
 
     def failure(self, request: Request, username: str) -> None:

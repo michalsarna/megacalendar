@@ -1,22 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="hero">
-  <h2>Print-ready wall calendars, one year per sheet</h2>
-  <p>megacalendar turns a few settings into a large-format PDF calendar ready for the print shop:
-     A0 or A1, month grids or a table with one column per month, your own colours, fonts, logo and
-     background artwork, public holidays for over 150 countries and your own marked days.</p>
+  <h2>{{ _("Print-ready wall calendars, one year per sheet") }}</h2>
+  <p>{{ _("megacalendar turns a few settings into a large-format PDF calendar ready for the print shop: A0 or A1, month grids or a table with one column per month, your own colours, fonts, logo and background artwork, public holidays for over 150 countries and your own marked days.") }}</p>
   <ul class="features">
-    <li><strong>Print quality.</strong> Vector output, every font embedded, a single colour model per document (RGB or CMYK), margins kept within 10&nbsp;mm.</li>
-    <li><strong>Your look.</strong> Separate fonts, sizes and colours for title, year, month names, day names, day numbers and legend; optional borders and spacing.</li>
-    <li><strong>Your days.</strong> Weekends, public holidays and private holidays with their own colours and notes, listed in an optional legend.</li>
-    <li><strong>Your account.</strong> Each user keeps their own projects and artwork library; the master user manages accounts and project allowances.</li>
+    <li><strong>{{ _("Print quality.") }}</strong> {{ _("Vector output, every font embedded, a single colour model per document (RGB or CMYK), margins kept within 10 mm.") }}</li>
+    <li><strong>{{ _("Your look.") }}</strong> {{ _("Separate fonts, sizes and colours for title, year, month names, day names, day numbers and legend; optional borders and spacing.") }}</li>
+    <li><strong>{{ _("Your days.") }}</strong> {{ _("Weekends, public holidays and private holidays with their own colours and notes, listed in an optional legend.") }}</li>
+    <li><strong>{{ _("Your account.") }}</strong> {{ _("Each user keeps their own projects and artwork library; the master user manages accounts and project allowances.") }}</li>
   </ul>
   <div class="actions" style="justify-content:center; text-align:center">
     {% if user %}
-      <a class="btn primary" href="/projects">Go to my projects</a>
+      <a class="btn primary" href="/projects">{{ _("Go to my projects") }}</a>
     {% else %}
-      <a class="btn" href="/register">Create an account</a>
-      <span class="hint">Every account starts with one year calendar and two one-month calendars; use the Log in button at the top if you already have one.</span>
+      <a class="btn" href="/register">{{ _("Create an account") }}</a>
+      <span class="hint">{{ _("Every account starts with one year calendar and two one-month calendars; use the Log in button at the top if you already have one.") }}</span>
     {% endif %}
   </div>
 </section>

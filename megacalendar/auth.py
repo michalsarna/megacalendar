@@ -119,8 +119,12 @@ def master_required_web(user: User = Depends(current_user_web)) -> User:
 
 
 def login(request: Request, user: User) -> None:
+    pre_login_lang = request.session.get("lang")  # keep an anonymous language choice made before login
     request.session.clear()
     request.session["user_id"] = user.id
+    lang = user.ui_language or pre_login_lang
+    if lang:
+        request.session["lang"] = lang
 
 
 def logout(request: Request) -> None:

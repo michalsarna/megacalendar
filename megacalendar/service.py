@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from . import config, mail, mfa
 from .auth import hash_password, verify_password
+from .i18n import t as _
 from .models import BackgroundAsset, DayOverride, DeliveryAddress, MailSettings, Project, User
 from .pdf import CalendarSpec, DayStyle, color_from_dict, render_calendar, render_to_image, to_mode
 from .pdf.render import max_month_gap_mm
@@ -65,7 +66,7 @@ def _apply(db: Session, project: Project, data: ProjectCreate | ProjectUpdate, o
     for key in ("background_asset_id", "logo_asset_id"):
         asset_id = getattr(data, key)
         if asset_id is not None and get_asset(db, asset_id, owner) is None:
-            raise ValueError(f"{key.replace('_', ' ')} {asset_id} does not exist")
+            raise ValueError(_("{field} {id} does not exist", field=key.replace("_", " "), id=asset_id))
     for key, value in data.model_dump().items():
         if key in FIXED_AFTER_CREATION and project.id is not None:
             continue  # the period of a calendar never changes once it exists
@@ -108,7 +109,7 @@ def delete_project(db: Session, project: Project) -> None:
 
 def set_day_override(db: Session, project: Project, day: date, data: DayOverrideIn) -> DayOverride:
     if day.year != project.year:
-        raise ValueError(f"{day} is not in calendar year {project.year}")
+        raise ValueError(_("{day} is not in calendar year {year}", day=day, year=project.year))
     existing = next((o for o in project.day_overrides if o.day == day), None)
     if existing is None:
         existing = DayOverride(project=project, day=day)
@@ -167,7 +168,7 @@ def _safe_suffix(filename: str) -> str:
     if suffix == ".jpeg":
         suffix = ".jpg"
     if suffix not in config.ALLOWED_BACKGROUND_SUFFIXES:
-        raise ValueError(f"background must be one of {sorted(config.ALLOWED_BACKGROUND_SUFFIXES)}")
+        raise ValueError(_("background must be one of {suffixes}", suffixes=sorted(config.ALLOWED_BACKGROUND_SUFFIXES)))
     return suffix
 
 
@@ -179,9 +180,9 @@ def _inspect_background(path: Path) -> tuple[int | None, int | None]:
 
             head = path.read_bytes()[:256 * 1024].lower()
             if b"<!entity" in head or b"<!doctype" in head and b"[" in head:
-                raise ValueError("SVG with a DTD / entity declarations is not accepted")
+                raise ValueError(_("SVG with a DTD / entity declarations is not accepted"))
             if svg2rlg(str(path)) is None:
-                raise ValueError("SVG could not be parsed")
+                raise ValueError(_("SVG could not be parsed"))
             return None, None
         from PIL import Image
 
@@ -192,7 +193,7 @@ def _inspect_background(path: Path) -> tuple[int | None, int | None]:
     except ValueError:
         raise
     except Exception as exc:  # Pillow/svglib raise a zoo of exception types
-        raise ValueError(f"background file is not a valid {path.suffix[1:].upper()}: {exc}") from exc
+        raise ValueError(_("background file is not a valid {kind}: {error}", kind=path.suffix[1:].upper(), error=exc)) from exc
 
 
 async def store_asset(db: Session, upload: UploadFile, owner: User) -> BackgroundAsset:
@@ -207,10 +208,10 @@ async def store_asset(db: Session, upload: UploadFile, owner: User) -> Backgroun
             while chunk := await upload.read(1024 * 1024):
                 written += len(chunk)
                 if written > config.MAX_BACKGROUND_BYTES:
-                    raise ValueError("background file too large")
+                    raise ValueError(_("background file too large"))
                 fh.write(chunk)
         if written == 0:
-            raise ValueError("empty upload")
+            raise ValueError(_("empty upload"))
         width, height = _inspect_background(target)
     except Exception:
         target.unlink(missing_ok=True)
@@ -226,7 +227,7 @@ async def store_asset(db: Session, upload: UploadFile, owner: User) -> Backgroun
 def delete_asset(db: Session, asset: BackgroundAsset) -> None:
     used_by = asset_usage(db, asset.owner).get(asset.id, 0)
     if used_by:
-        raise ValueError(f"background is used by {used_by} project(s); detach it first")
+        raise ValueError(_("background is used by {count} project(s); detach it first", count=used_by))
     path = asset_path(asset)
     db.delete(asset)
     db.commit()
@@ -374,23 +375,25 @@ def register_user(db: Session, data: RegisterIn) -> User:
     when the master hasn't configured a mail server yet (an unconfirmable account is a dead end).
     The account starts unverified; confirm_email() activates it once the emailed code comes back."""
     field = contact_in_use(db, data.email, data.phone)
-    if field:
-        raise ValueError(f"an account with this {field} already exists")
+    if field == "email":
+        raise ValueError(_("an account with this email already exists"))
+    if field == "phone":
+        raise ValueError(_("an account with this phone already exists"))
     settings = get_mail_settings(db)
     if not mail_configured(settings):
-        raise ValueError("account registration is temporarily unavailable: no mail server is configured yet")
+        raise ValueError(_("account registration is temporarily unavailable: no mail server is configured yet"))
     user = create_user(db, UserCreate(**data.model_dump()), email_verified=False)
     code = _issue_code(db, user, "register")
     try:
         mail.send_confirmation_email(settings, user.email, code)
     except Exception as exc:
-        raise ValueError(f"could not send the confirmation email: {exc}") from exc
+        raise ValueError(_("could not send the confirmation email: {error}", error=exc)) from exc
     return user
 
 
 def create_user(db: Session, data: UserCreate, email_verified: bool = True) -> User:
     if get_user_by_name(db, data.username) is not None:
-        raise ValueError(f"username {data.username!r} is already taken")
+        raise ValueError(_("username {username!r} is already taken", username=data.username))
     user = User(username=data.username, password_hash=hash_password(data.password), is_master=False,
                 project_limit=data.project_limit, small_project_limit=data.small_project_limit,
                 first_name=data.first_name, last_name=data.last_name,
@@ -429,7 +432,7 @@ def _check_code(user: User, code: str, purpose: str) -> None:
             and expires is not None and expires >= datetime.now(timezone.utc)
             and hmac.compare_digest(user.verification_code, code))
     if not valid:
-        raise ValueError("invalid or expired code")
+        raise ValueError(_("invalid or expired code"))
 
 
 def _clear_code(db: Session, user: User) -> None:
@@ -457,15 +460,15 @@ def confirm_email(db: Session, user: User, code: str) -> None:
 
 def resend_confirmation(db: Session, user: User) -> None:
     if user.email_verified:
-        raise ValueError("this account is already confirmed")
+        raise ValueError(_("this account is already confirmed"))
     settings = get_mail_settings(db)
     if not mail_configured(settings):
-        raise ValueError("no mail server is configured; ask the master user to set it up")
+        raise ValueError(_("no mail server is configured; ask the master user to set it up"))
     code = _issue_code(db, user, "register")
     try:
         mail.send_confirmation_email(settings, user.email, code)
     except Exception as exc:
-        raise ValueError(f"could not send the confirmation email: {exc}") from exc
+        raise ValueError(_("could not send the confirmation email: {error}", error=exc)) from exc
 
 
 def request_password_reset(db: Session, identifier: str) -> None:
@@ -487,7 +490,7 @@ def request_password_reset(db: Session, identifier: str) -> None:
 def reset_password(db: Session, identifier: str, code: str, new_password: str) -> None:
     user = _find_by_identifier(db, identifier)
     if user is None:
-        raise ValueError("invalid or expired code")
+        raise ValueError(_("invalid or expired code"))
     _check_code(user, code, "reset")
     user.password_hash = hash_password(new_password)
     _clear_code(db, user)
@@ -529,11 +532,11 @@ def mail_settings_read(db: Session) -> MailSettingsRead:
 def send_test_email(db: Session, to_email: str) -> None:
     settings = get_mail_settings(db)
     if not mail_configured(settings):
-        raise ValueError("fill in the mail server host and from-address first")
+        raise ValueError(_("fill in the mail server host and from-address first"))
     try:
         mail.send_test_email(settings, to_email)
     except Exception as exc:
-        raise ValueError(f"could not send the test email: {exc}") from exc
+        raise ValueError(_("could not send the test email: {error}", error=exc)) from exc
 
 
 # ---------------------------------------------------------------- two-factor authentication (TOTP)
@@ -549,16 +552,16 @@ def start_mfa_setup(db: Session, user: User) -> tuple[str, str]:
 
 def confirm_mfa_setup(db: Session, user: User, code: str) -> None:
     if not user.totp_secret:
-        raise ValueError("start MFA setup first")
+        raise ValueError(_("start MFA setup first"))
     if not mfa.verify_code(user.totp_secret, code):
-        raise ValueError("invalid authentication code")
+        raise ValueError(_("invalid authentication code"))
     user.mfa_enabled = True
     db.commit()
 
 
 def disable_mfa(db: Session, user: User, current_password: str) -> None:
     if not verify_password(current_password, user.password_hash):
-        raise ValueError("current password is wrong")
+        raise ValueError(_("current password is wrong"))
     user.mfa_enabled = False
     user.totp_secret = None
     db.commit()
@@ -584,7 +587,7 @@ def update_user(db: Session, user: User, data: UserUpdate) -> User:
 
 def delete_user(db: Session, user: User) -> None:
     if user.is_master:
-        raise ValueError("the master user cannot be deleted")
+        raise ValueError(_("the master user cannot be deleted"))
     for asset in list(user.assets):  # remove files before the rows cascade away
         path = asset_path(asset)
         if path:
@@ -606,9 +609,14 @@ def update_theme(db: Session, user: User, theme: str) -> None:
     db.commit()
 
 
+def update_ui_language(db: Session, user: User, language: str) -> None:
+    user.ui_language = language
+    db.commit()
+
+
 def change_password(db: Session, user: User, data: PasswordChange) -> None:
     if not verify_password(data.current_password, user.password_hash):
-        raise ValueError("current password is wrong")
+        raise ValueError(_("current password is wrong"))
     user.password_hash = hash_password(data.new_password)
     db.commit()
 

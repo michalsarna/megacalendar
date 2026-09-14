@@ -4,7 +4,7 @@
 {% macro color(name, value, nullable=False) %}
   {% set on = (not nullable) or (value is not none) %}
   <div class="color" data-color="{{ name }}" data-mode="{{ project.color_mode }}">
-    {% if nullable %}<input type="checkbox" name="{{ name }}_enabled" {% if on %}checked{% endif %} title="Enable">{% endif %}
+    {% if nullable %}<input type="checkbox" name="{{ name }}_enabled" {% if on %}checked{% endif %} title="{{ _('Enable') }}">{% endif %}
     {% if project.color_mode == "RGB" %}
       <input type="color" class="picker" name="{{ name }}" value="{{ to_hex(value) }}" {% if not on %}disabled{% endif %}>
       <code class="hex">{{ to_hex(value) }}</code>
@@ -13,7 +13,7 @@
       {% for ch in ["c","m","y","k"] %}
         <input type="number" name="{{ name }}_{{ ch }}" min="0" max="100" step="0.5" value="{{ v[ch] }}" title="{{ ch|upper }} %" {% if not on %}disabled{% endif %}>
       {% endfor %}
-      <span class="swatch-wrap"><span class="swatch" title="Click to pick a colour"></span><input type="color" class="picker hidden-picker" value="{{ to_hex(value) }}" tabindex="-1"></span>
+      <span class="swatch-wrap"><span class="swatch" title="{{ _('Click to pick a colour') }}"></span><input type="color" class="picker hidden-picker" value="{{ to_hex(value) }}" tabindex="-1"></span>
     {% endif %}
   </div>
 {% endmacro %}
@@ -29,14 +29,14 @@
 
 {% macro font_select(name, value, sample, bold=False) %}
   <span class="fontpick">
-    <select name="{{ name }}" class="font-select" data-bold="{{ 1 if bold else 0 }}" data-default="{{ 'project' if name != 'font_family' else '' }}">
-      {% if name != "font_family" %}<option value="" style="font-family:'mc-{{ project.font_family }}'" {% if not value %}selected{% endif %}>Default ({{ project.font_family }})</option>{% endif %}
+    <select name="{{ name }}" class="font-select" data-bold="{{ 1 if bold else 0 }}" data-default="{{ 'project' if name != 'font_family' else '' }}" data-default-label="{{ _('Default ({family})', family=project.font_family) }}">
+      {% if name != "font_family" %}<option value="" style="font-family:'mc-{{ project.font_family }}'" {% if not value %}selected{% endif %}>{{ _("Default ({family})", family=project.font_family) }}</option>{% endif %}
       {% for f in fonts %}<option value="{{ f }}" style="font-family:'mc-{{ f }}'" {% if f == value %}selected{% endif %}>{{ f }}</option>{% endfor %}
     </select>
     <span class="font-preview" style="font-family:'mc-{{ value or project.font_family }}';{% if bold %}font-weight:700{% endif %}">{{ sample }}</span>
   </span>
 {% endmacro %}
-{% macro scale(name, value) %}<input name="{{ name }}" type="number" min="25" max="300" step="5" value="{{ value|int }}" title="% of the automatic size">{% endmacro %}
+{% macro scale(name, value) %}<input name="{{ name }}" type="number" min="25" max="300" step="5" value="{{ value|int }}" title="{{ _('% of the automatic size') }}">{% endmacro %}
 
 {% block content %}
 {% set is_month = project.kind == "month" %}
@@ -44,247 +44,248 @@
 {% set sample_month = month_names[1] %}
 {% set day_names_off = is_table and not project.table_day_names %}
 {% set per_day_names_off = day_names_off or not is_table %}
-{% if request.query_params.get("saved") %}<div class="ok">Saved.</div>{% endif %}
-<noscript><div class="errors">Autosave needs JavaScript; use the “Save project” button.</div></noscript>
+{% if request.query_params.get("saved") %}<div class="ok">{{ _("Saved.") }}</div>{% endif %}
+<noscript><div class="errors">{{ _("Autosave needs JavaScript; use the “Save project” button.") }}</div></noscript>
 
 <form method="post" action="/projects/{{ project.id }}" id="settings"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="form_color_mode" value="{{ project.color_mode }}">
 
   <fieldset>
-    <legend>Project</legend>
+    <legend>{{ _("Project") }}</legend>
     <div class="row">
-      <label>Name <input name="name" value="{{ project.name }}" required maxlength="200"></label>
+      <label>{{ _("Name") }} <input name="name" value="{{ project.name }}" required maxlength="200"></label>
       {% if is_month %}
-      <label>Period <span class="fixed">{{ month_names[project.month] }} {{ project.year }}</span><input type="hidden" name="year" value="{{ project.year }}"></label>
-      <span class="hint">The month and year of a one-month calendar cannot be changed.</span>
+      <label>{{ _("Period") }} <span class="fixed">{{ month_names[project.month] }} {{ project.year }}</span><input type="hidden" name="year" value="{{ project.year }}"></label>
+      <span class="hint">{{ _("The month and year of a one-month calendar cannot be changed.") }}</span>
       {% else %}
-      <label>Year <span class="fixed">{{ project.year }}</span><input type="hidden" name="year" value="{{ project.year }}"></label>
-      <span class="hint">The year of a calendar cannot be changed; create a new one for another year.</span>
+      <label>{{ _("Year") }} <span class="fixed">{{ project.year }}</span><input type="hidden" name="year" value="{{ project.year }}"></label>
+      <span class="hint">{{ _("The year of a calendar cannot be changed; create a new one for another year.") }}</span>
       {% endif %}
     </div>
   </fieldset>
 
   <fieldset>
-    <legend>Sheet</legend>
+    <legend>{{ _("Sheet") }}</legend>
     <div class="row">
-      <label>Size
+      <label>{{ _("Size") }}
         <select name="page_size">{% for code, ps in page_sizes.items() %}
           <option value="{{ code }}" {% if code == project.page_size %}selected{% endif %}>{{ code }} ({{ ps.width_mm|int }} × {{ ps.height_mm|int }} mm)</option>{% endfor %}
         </select></label>
-      <label>Orientation
+      <label>{{ _("Orientation") }}
         <select name="orientation">{% for o in orientations %}<option value="{{ o }}" {% if o == project.orientation %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
-      <label{% if is_month %} class="dimmed" inert{% endif %}>Layout{% if is_month %} (one-month calendar){% endif %}
+      <label{% if is_month %} class="dimmed" inert{% endif %}>{{ _("Layout") }}{% if is_month %} {{ _("(one-month calendar)") }}{% endif %}
         <select name="layout">
-          <option value="grid" {% if not is_table %}selected{% endif %}>Month grids (3×4 / 4×3)</option>
-          <option value="columns" {% if is_table %}selected{% endif %}>Table style (one column per month)</option>
+          <option value="grid" {% if not is_table %}selected{% endif %}>{{ _("Month grids (3×4 / 4×3)") }}</option>
+          <option value="columns" {% if is_table %}selected{% endif %}>{{ _("Table style (one column per month)") }}</option>
         </select></label>
-      <label>Margin (mm, max {{ max_margin_mm }}) <input name="margin_mm" type="number" min="0" max="{{ max_margin_mm }}" step="0.5" value="{{ project.margin_mm }}"></label>
-      <label>Font (project default) {{ font_select("font_family", project.font_family, "Aa Bb 12 " ~ month_names[1]) }}</label>
-      <label>Colour model
+      <label>{{ _("Margin (mm, max {max})", max=max_margin_mm) }} <input name="margin_mm" type="number" min="0" max="{{ max_margin_mm }}" step="0.5" value="{{ project.margin_mm }}"></label>
+      <label>{{ _("Font (project default)") }} {{ font_select("font_family", project.font_family, "Aa Bb 12 " ~ month_names[1]) }}</label>
+      <label>{{ _("Colour model") }}
         <select name="color_mode">{% for m in color_modes %}<option value="{{ m }}" {% if m == project.color_mode %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
     </div>
-    <p class="hint">RGB for screen/office printing, CMYK for a print shop. Switching the colour model converts all existing colours (approximately) on save.</p>
+    <p class="hint">{{ _("RGB for screen/office printing, CMYK for a print shop. Switching the colour model converts all existing colours (approximately) on save.") }}</p>
   </fieldset>
 
   <fieldset>
-    <legend>Calendar</legend>
+    <legend>{{ _("Calendar") }}</legend>
     <div class="row">
-      <label>Language
+      <label>{{ _("Language") }}
         <select name="locale">
           {% set known = languages|map(attribute=0)|list %}
           {% if project.locale not in known %}<option value="{{ project.locale }}" selected>{{ project.locale }}</option>{% endif %}
           {% for code, name in languages %}<option value="{{ code }}" {% if code == project.locale %}selected{% endif %}>{{ name }}</option>{% endfor %}
         </select></label>
-      <label>Week starts on
+      <label>{{ _("Week starts on") }}
         <select name="week_start">
-          <option value="0" {% if project.week_start == 0 %}selected{% endif %}>Monday</option>
-          <option value="6" {% if project.week_start == 6 %}selected{% endif %}>Sunday</option>
-          <option value="5" {% if project.week_start == 5 %}selected{% endif %}>Saturday</option>
+          <option value="0" {% if project.week_start == 0 %}selected{% endif %}>{{ _("Monday") }}</option>
+          <option value="6" {% if project.week_start == 6 %}selected{% endif %}>{{ _("Sunday") }}</option>
+          <option value="5" {% if project.week_start == 5 %}selected{% endif %}>{{ _("Saturday") }}</option>
         </select></label>
-      <label class="inline"><input type="checkbox" name="show_week_numbers" {% if project.show_week_numbers %}checked{% endif %}> Show ISO week numbers</label>
-      <label class="inline"><input type="checkbox" name="show_legend" {% if project.show_legend %}checked{% endif %}> Legend of private holidays at the bottom</label>
+      <label class="inline"><input type="checkbox" name="show_week_numbers" {% if project.show_week_numbers %}checked{% endif %}> {{ _("Show ISO week numbers") }}</label>
+      <label class="inline"><input type="checkbox" name="show_legend" {% if project.show_legend %}checked{% endif %}> {{ _("Legend of private holidays at the bottom") }}</label>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <label>Legend font {{ font_select("legend_font", project.legend_font, "15 " ~ month_names[3][:3] ~ " – Company day") }}</label>
-      <label>Legend size (%) {{ scale("legend_scale", project.legend_scale) }}</label>
+      <label>{{ _("Legend font") }} {{ font_select("legend_font", project.legend_font, "15 " ~ month_names[3][:3] ~ " – Company day") }}</label>
+      <label>{{ _("Legend size (%)") }} {{ scale("legend_scale", project.legend_scale) }}</label>
     </div>
   </fieldset>
 
   <fieldset id="header">
-    <legend>Header (title, year, logo)</legend>
+    <legend>{{ _("Header (title, year, logo)") }}</legend>
     {% if is_month %}
     <div class="row">
-      <label class="inline"><input type="checkbox" name="show_title" {% if project.show_title %}checked{% endif %}> Show the header (title, year, logo)</label>
-      <span class="hint">Without the header the month grid uses the whole sheet.</span>
+      <label class="inline"><input type="checkbox" name="show_title" {% if project.show_title %}checked{% endif %}> {{ _("Show the header (title, year, logo)") }}</label>
+      <span class="hint">{{ _("Without the header the month grid uses the whole sheet.") }}</span>
     </div>
     {% else %}<input type="hidden" name="show_title" value="on">{% endif %}
     <div class="row{% if not project.show_title %} dimmed{% endif %}" id="header-fields"{% if not project.show_title %} inert{% endif %} style="margin-top:.8rem">
-      <label>Title <input name="title" value="{{ project.title or '' }}" placeholder="{{ project.year }}"></label>
-      <label>Title alignment
+      <label>{{ _("Title") }} <input name="title" value="{{ project.title or '' }}" placeholder="{{ project.year }}"></label>
+      <label>{{ _("Title alignment") }}
         <select name="title_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.title_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <div class="field"><span>Title colour</span>{{ color("title_color", project.title_color) }}</div>
+      <div class="field"><span>{{ _("Title colour") }}</span>{{ color("title_color", project.title_color) }}</div>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <label>Title font {{ font_select("title_font", project.title_font, project.title or project.year, bold=True) }}</label>
-      <label>Title size (%) {{ scale("title_scale", project.title_scale) }}</label>
-      <span class="hint">Without a title the year is printed as the title.</span>
+      <label>{{ _("Title font") }} {{ font_select("title_font", project.title_font, project.title or project.year, bold=True) }}</label>
+      <label>{{ _("Title size (%)") }} {{ scale("title_scale", project.title_scale) }}</label>
+      <span class="hint">{{ _("Without a title the year is printed as the title.") }}</span>
     </div>
     <div class="row{% if not project.title %} dimmed{% endif %}" id="year-options" style="margin-top:.8rem"{% if not project.title %} inert{% endif %}>
-      <label class="inline"><input type="checkbox" name="show_year" {% if project.show_year %}checked{% endif %}> Also show the year</label>
-      <label>Year alignment
+      <label class="inline"><input type="checkbox" name="show_year" {% if project.show_year %}checked{% endif %}> {{ _("Also show the year") }}</label>
+      <label>{{ _("Year alignment") }}
         <select name="year_align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.year_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <div class="field"><span>Year colour (untick = same as title)</span>{{ color("year_color", project.year_color, nullable=True) }}</div>
-      <label>Year font {{ font_select("year_font", project.year_font, project.year) }}</label>
-      <label>Year size (%) {{ scale("year_scale", project.year_scale) }}</label>
-      <span class="hint">Same alignment as the title puts the year underneath it.</span>
+      <div class="field"><span>{{ _("Year colour (untick = same as title)") }}</span>{{ color("year_color", project.year_color, nullable=True) }}</div>
+      <label>{{ _("Year font") }} {{ font_select("year_font", project.year_font, project.year) }}</label>
+      <label>{{ _("Year size (%)") }} {{ scale("year_scale", project.year_scale) }}</label>
+      <span class="hint">{{ _("Same alignment as the title puts the year underneath it.") }}</span>
     </div>
     <div class="row{% if not project.show_title %} dimmed{% endif %}" id="logo-fields"{% if not project.show_title %} inert{% endif %} style="margin-top:.8rem">
-      <label>Logo
+      <label>{{ _("Logo") }}
         <select name="logo_asset_id">
-          <option value="">— none —</option>
+          <option value="">{{ _("— none —") }}</option>
           {% for a in assets %}<option value="{{ a.id }}" {% if a.id == project.logo_asset_id %}selected{% endif %}>{{ a.original_name }} ({{ a.suffix[1:]|upper }}{% if a.width %}, {{ a.width }}×{{ a.height }}px{% endif %})</option>{% endfor %}
         </select></label>
-      <label>Logo position
+      <label>{{ _("Logo position") }}
         <select name="logo_align" id="logo-align">{% for a in title_aligns %}<option value="{{ a }}" {% if a == project.logo_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <label>Logo opacity (%) <input name="logo_opacity" type="number" min="0" max="100" step="1" value="{{ project.logo_opacity|int }}"></label>
-      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=logo">Upload a new logo…</a>
+      <label>{{ _("Logo opacity (%)") }} <input name="logo_opacity" type="number" min="0" max="100" step="1" value="{{ project.logo_opacity|int }}"></label>
+      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=logo">{{ _("Upload a new logo…") }}</a>
     </div>
-    <p class="hint">The logo is scaled to the height of the header band (width capped at 30% of the sheet). It can only take a position not used by the title or the year.</p>
+    <p class="hint">{{ _("The logo is scaled to the height of the header band (width capped at 30% of the sheet). It can only take a position not used by the title or the year.") }}</p>
   </fieldset>
 
   <fieldset>
-    <legend>Months</legend>
+    <legend>{{ _("Months") }}</legend>
     <div class="row">
-      <div class="field"><span>Month names colour</span>{{ color("month_name_color", project.month_name_color) }}</div>
-      <label>Month names font {{ font_select("month_name_font", project.month_name_font, month_names[1], bold=True) }}</label>
-      <label>Month names size (%) {{ scale("month_name_scale", project.month_name_scale) }}</label>
-      <label class="inline"><input type="checkbox" name="month_names_uppercase" {% if project.month_names_uppercase %}checked{% endif %}> MONTH NAMES in upper case</label>
+      <div class="field"><span>{{ _("Month names colour") }}</span>{{ color("month_name_color", project.month_name_color) }}</div>
+      <label>{{ _("Month names font") }} {{ font_select("month_name_font", project.month_name_font, month_names[1], bold=True) }}</label>
+      <label>{{ _("Month names size (%)") }} {{ scale("month_name_scale", project.month_name_scale) }}</label>
+      <label class="inline"><input type="checkbox" name="month_names_uppercase" {% if project.month_names_uppercase %}checked{% endif %}> {{ _("MONTH NAMES in upper case") }}</label>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <div class="field"><span>Month border colour (untick = no border)</span>{{ color("month_border_color", project.month_border_color, nullable=True) }}</div>
-      <label>Month border width (mm) <input name="month_border_width_mm" type="number" min="0.1" max="5" step="0.1" value="{{ project.month_border_width_mm }}"></label>
-      <label{% if is_month %} class="dimmed" inert{% endif %}>Space between months (mm, blank = automatic, max {{ month_gap_limit }})
-        <input name="month_gap_mm" type="number" min="0" max="{{ month_gap_limit }}" step="0.5" value="{{ project.month_gap_mm if project.month_gap_mm is not none else '' }}" placeholder="auto"></label>
+      <div class="field"><span>{{ _("Month border colour (untick = no border)") }}</span>{{ color("month_border_color", project.month_border_color, nullable=True) }}</div>
+      <label>{{ _("Month border width (mm)") }} <input name="month_border_width_mm" type="number" min="0.1" max="5" step="0.1" value="{{ project.month_border_width_mm }}"></label>
+      <label{% if is_month %} class="dimmed" inert{% endif %}>{{ _("Space between months (mm, blank = automatic, max {max})", max=month_gap_limit) }}
+        <input name="month_gap_mm" type="number" min="0" max="{{ month_gap_limit }}" step="0.5" value="{{ project.month_gap_mm if project.month_gap_mm is not none else '' }}" placeholder="{{ _('auto') }}"></label>
     </div>
   </fieldset>
 
   <fieldset>
-    <legend>Days</legend>
+    <legend>{{ _("Days") }}</legend>
     <div class="row">
-      <div class="field"><span>Day numbers colour</span>{{ color("day_number_color", project.day_number_color) }}</div>
-      <label>Day numbers font {{ font_select("day_number_font", project.day_number_font, "1 2 3 14 31") }}</label>
-      <label>Day number size (%) <input name="day_number_scale" type="number" min="10" max="300" step="5" value="{{ project.day_number_scale|int }}" title="% of the automatic size"></label>
-      <label>Day number horizontal position
+      <div class="field"><span>{{ _("Day numbers colour") }}</span>{{ color("day_number_color", project.day_number_color) }}</div>
+      <label>{{ _("Day numbers font") }} {{ font_select("day_number_font", project.day_number_font, "1 2 3 14 31") }}</label>
+      <label>{{ _("Day number size (%)") }} <input name="day_number_scale" type="number" min="10" max="300" step="5" value="{{ project.day_number_scale|int }}" title="{{ _('% of the automatic size') }}"></label>
+      <label>{{ _("Day number horizontal position") }}
         <select name="day_number_align">{% for a in ["left", "center", "right"] %}<option value="{{ a }}" {% if a == project.day_number_align %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <label>Day number vertical position
+      <label>{{ _("Day number vertical position") }}
         <select name="day_number_valign">{% for a in ["top", "middle", "bottom"] %}<option value="{{ a }}" {% if a == project.day_number_valign %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <div class="field"><span>Week numbers colour</span>{{ color("week_number_color", project.week_number_color) }}</div>
-      <label>Week number size (%) {{ scale("week_number_scale", project.week_number_scale) }}</label>
+      <div class="field"><span>{{ _("Week numbers colour") }}</span>{{ color("week_number_color", project.week_number_color) }}</div>
+      <label>{{ _("Week number size (%)") }} {{ scale("week_number_scale", project.week_number_scale) }}</label>
     </div>
     <div class="row" style="margin-top:.8rem">
       <span class="table-only{% if not is_table %} dimmed{% endif %}" {% if not is_table %}inert{% endif %}>
-        <label class="inline"><input type="checkbox" name="table_day_names" {% if project.table_day_names %}checked{% endif %}> Show day names next to day numbers (Table style)</label>
+        <label class="inline"><input type="checkbox" name="table_day_names" {% if project.table_day_names %}checked{% endif %}> {{ _("Show day names next to day numbers (Table style)") }}</label>
       </span>
-      <div class="field{% if day_names_off %} dimmed{% endif %}" data-dayname="all"{% if day_names_off %} inert{% endif %}><span>Day names colour</span>{{ color("day_name_color", project.day_name_color) }}</div>
-      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names font {{ font_select("day_name_font", project.day_name_font, "Mon Tue Wed") }}</label>
-      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names size (%) {{ scale("day_name_scale", project.day_name_scale) }}</label>
-      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>Day names vertical position
+      <div class="field{% if day_names_off %} dimmed{% endif %}" data-dayname="all"{% if day_names_off %} inert{% endif %}><span>{{ _("Day names colour") }}</span>{{ color("day_name_color", project.day_name_color) }}</div>
+      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>{{ _("Day names font") }} {{ font_select("day_name_font", project.day_name_font, "Mon Tue Wed") }}</label>
+      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>{{ _("Day names size (%)") }} {{ scale("day_name_scale", project.day_name_scale) }}</label>
+      <label data-dayname="all"{% if day_names_off %} inert{% endif %}>{{ _("Day names vertical position") }}
         <select name="day_name_valign">{% for a in ["top", "middle", "bottom"] %}<option value="{{ a }}" {% if a == project.day_name_valign %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <label class="inline" data-dayname="all"{% if day_names_off %} inert{% endif %}><input type="checkbox" name="day_names_uppercase" {% if project.day_names_uppercase %}checked{% endif %}> DAY NAMES in upper case</label>
+      <label class="inline" data-dayname="all"{% if day_names_off %} inert{% endif %}><input type="checkbox" name="day_names_uppercase" {% if project.day_names_uppercase %}checked{% endif %}> {{ _("DAY NAMES in upper case") }}</label>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <div class="field"><span>Mon–Fri background (untick = paper)</span>{{ color("weekday_color", project.weekday_color, nullable=True) }}</div>
-      <div class="field"><span>Sat–Sun background (untick = paper)</span>{{ color("weekend_color", project.weekend_color, nullable=True) }}</div>
+      <div class="field"><span>{{ _("Mon–Fri background (untick = paper)") }}</span>{{ color("weekday_color", project.weekday_color, nullable=True) }}</div>
+      <div class="field"><span>{{ _("Sat–Sun background (untick = paper)") }}</span>{{ color("weekend_color", project.weekend_color, nullable=True) }}</div>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <div class="field"><span>Day border colour (untick = no border)</span>{{ color("day_border_color", project.day_border_color, nullable=True) }}</div>
-      <label>Day border width (mm) <input name="day_border_width_mm" type="number" min="0.1" max="3" step="0.1" value="{{ project.day_border_width_mm }}"></label>
+      <div class="field"><span>{{ _("Day border colour (untick = no border)") }}</span>{{ color("day_border_color", project.day_border_color, nullable=True) }}</div>
+      <label>{{ _("Day border width (mm)") }} <input name="day_border_width_mm" type="number" min="0.1" max="3" step="0.1" value="{{ project.day_border_width_mm }}"></label>
     </div>
-    <p class="hint">Click a swatch to pick a colour. Public and private holidays below override these for their days.</p>
+    <p class="hint">{{ _("Click a swatch to pick a colour. Public and private holidays below override these for their days.") }}</p>
   </fieldset>
 
   <fieldset>
-    <legend>Public holidays</legend>
+    <legend>{{ _("Public holidays") }}</legend>
     <div class="row">
-      <label class="inline"><input type="checkbox" name="holidays_enabled" {% if project.holidays_enabled %}checked{% endif %}> Colour public holidays</label>
-      <label>Country
+      <label class="inline"><input type="checkbox" name="holidays_enabled" {% if project.holidays_enabled %}checked{% endif %}> {{ _("Colour public holidays") }}</label>
+      <label>{{ _("Country") }}
         <select name="holiday_country"><option value="">—</option>{% for c in countries %}<option value="{{ c }}" {% if c == project.holiday_country %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
-      <label>Region / subdivision (optional) <input name="holiday_subdiv" value="{{ project.holiday_subdiv or '' }}" placeholder="e.g. BY"></label>
-      <div class="field"><span>Holiday background (untick = none)</span>{{ color("holiday_color", project.holiday_color, nullable=True) }}</div>
+      <label>{{ _("Region / subdivision (optional)") }} <input name="holiday_subdiv" value="{{ project.holiday_subdiv or '' }}" placeholder="{{ _('e.g. BY') }}"></label>
+      <div class="field"><span>{{ _("Holiday background (untick = none)") }}</span>{{ color("holiday_color", project.holiday_color, nullable=True) }}</div>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <div class="field"><span>Holiday day number colour (untick = normal)</span>{{ color("holiday_day_number_color", project.holiday_day_number_color, nullable=True) }}</div>
-      <div class="field{% if per_day_names_off %} dimmed{% endif %}" data-dayname="perday"{% if per_day_names_off %} inert{% endif %}><span>Holiday day name colour (untick = normal, Table style)</span>{{ color("holiday_day_name_color", project.holiday_day_name_color, nullable=True) }}</div>
+      <div class="field"><span>{{ _("Holiday day number colour (untick = normal)") }}</span>{{ color("holiday_day_number_color", project.holiday_day_number_color, nullable=True) }}</div>
+      <div class="field{% if per_day_names_off %} dimmed{% endif %}" data-dayname="perday"{% if per_day_names_off %} inert{% endif %}><span>{{ _("Holiday day name colour (untick = normal, Table style)") }}</span>{{ color("holiday_day_name_color", project.holiday_day_name_color, nullable=True) }}</div>
     </div>
   </fieldset>
 
   <fieldset id="background">
-    <legend>Background artwork</legend>
+    <legend>{{ _("Background artwork") }}</legend>
     <div class="row">
-      <label>Background from library
+      <label>{{ _("Background from library") }}
         <select name="background_asset_id">
-          <option value="">— none —</option>
+          <option value="">{{ _("— none —") }}</option>
           {% for a in assets %}<option value="{{ a.id }}" {% if a.id == project.background_asset_id %}selected{% endif %}>{{ a.original_name }} ({{ a.suffix[1:]|upper }}{% if a.width %}, {{ a.width }}×{{ a.height }}px{% endif %})</option>{% endfor %}
         </select></label>
-      <label>Fit <select name="background_mode">{% for m in background_modes %}<option value="{{ m }}" {% if m == project.background_mode %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
-      <label>Opacity (%) <input name="background_opacity" type="number" min="0" max="100" step="1" value="{{ project.background_opacity|int }}"></label>
-      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=background">Upload a new background…</a>
+      <label>{{ _("Fit") }} <select name="background_mode">{% for m in background_modes %}<option value="{{ m }}" {% if m == project.background_mode %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+      <label>{{ _("Opacity (%)") }} <input name="background_opacity" type="number" min="0" max="100" step="1" value="{{ project.background_opacity|int }}"></label>
+      <a class="btn" href="/projects/{{ project.id }}/upload?purpose=background">{{ _("Upload a new background…") }}</a>
     </div>
-    <p class="hint">Lower opacity fades the artwork towards the paper. Manage the shared library on the <a href="/projects#backgrounds">start page</a>.</p>
+    <p class="hint">{{ _("Lower opacity fades the artwork towards the paper. Manage the shared library on the") }} <a href="/projects#backgrounds">{{ _("start page") }}</a>.</p>
   </fieldset>
 </form>
 
 {% set default_bg = project.weekend_color or ({"c":0,"m":0,"y":0,"k":12} if project.color_mode == "CMYK" else {"r":224,"g":224,"b":224}) %}
-<h2 id="days">Private holidays</h2>
-<p class="hint">Single days with their own background and text colours. They beat public holidays and weekends, and appear in the legend when it is enabled. Click a row to load it into the form.</p>
+<h2 id="days">{{ _("Private holidays") }}</h2>
+<p class="hint">{{ _("Single days with their own background and text colours. They beat public holidays and weekends, and appear in the legend when it is enabled. Click a row to load it into the form.") }}</p>
 <form method="post" action="/projects/{{ project.id }}/days" id="private-holiday"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="form_color_mode" value="{{ project.color_mode }}">
   <fieldset>
     <div class="row">
-      <label>Month
+      <label>{{ _("Month") }}
         <select name="month" id="ov-month"{% if is_month %} class="fixed-select"{% endif %}>{% for m in range(1, 13) %}{% if not is_month or m == project.month %}<option value="{{ m }}" {% if is_month %}selected{% endif %}>{{ month_names[m] }}</option>{% endif %}{% endfor %}</select></label>
-      <label>Day
+      <label>{{ _("Day") }}
         <select name="day_of_month" id="ov-day">{% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></label>
-      <span class="hint">Year {{ project.year }}</span>
-      <label>Note <input name="note" maxlength="200" placeholder="Company day off"></label>
+      <span class="hint">{{ _("Year {year}", year=project.year) }}</span>
+      <label>{{ _("Note") }} <input name="note" maxlength="200" placeholder="{{ _('Company day off') }}"></label>
     </div>
     <div class="row" style="margin-top:.8rem">
-      <div class="field"><span>Background (untick = no background)</span>{{ color("ov_color", default_bg, nullable=True) }}</div>
-      <div class="field"><span>Day number colour (untick = normal)</span>{{ color("ov_number_color", none, nullable=True) }}</div>
-      <div class="field{% if per_day_names_off %} dimmed{% endif %}" data-dayname="perday"{% if per_day_names_off %} inert{% endif %}><span>Day name colour (untick = normal, Table style)</span>{{ color("ov_name_color", none, nullable=True) }}</div>
-      <button type="submit" id="ov-submit">Add day</button>
-      <button type="button" id="ov-reset" hidden>New entry</button>
+      <div class="field"><span>{{ _("Background (untick = no background)") }}</span>{{ color("ov_color", default_bg, nullable=True) }}</div>
+      <div class="field"><span>{{ _("Day number colour (untick = normal)") }}</span>{{ color("ov_number_color", none, nullable=True) }}</div>
+      <div class="field{% if per_day_names_off %} dimmed{% endif %}" data-dayname="perday"{% if per_day_names_off %} inert{% endif %}><span>{{ _("Day name colour (untick = normal, Table style)") }}</span>{{ color("ov_name_color", none, nullable=True) }}</div>
+      <button type="submit" id="ov-submit" data-t-add="{{ _('Add day') }}" data-t-update="{{ _('Update') }}">{{ _("Add day") }}</button>
+      <button type="button" id="ov-reset" hidden>{{ _("New entry") }}</button>
     </div>
   </fieldset>
 </form>
 {% if project.day_overrides %}
 <table id="ov-list">
-  <thead><tr><th>Date</th><th>Background</th><th>Day number</th><th>Day name</th><th>Note</th><th></th></tr></thead>
+  <thead><tr><th>{{ _("Date") }}</th><th>{{ _("Background") }}</th><th>{{ _("Day number") }}</th><th>{{ _("Day name") }}</th><th>{{ _("Note") }}</th><th></th></tr></thead>
   <tbody>
   {% for o in project.day_overrides %}
-    <tr class="clickable" data-ov-day="{{ o.day }}" data-ov-note="{{ o.note or '' }}" data-ov-color='{{ o.color|tojson }}' data-ov-number='{{ o.day_number_color|tojson }}' data-ov-name='{{ o.day_name_color|tojson }}' title="Click to edit">
+    <tr class="clickable" data-ov-day="{{ o.day }}" data-ov-note="{{ o.note or '' }}" data-ov-color='{{ o.color|tojson }}' data-ov-number='{{ o.day_number_color|tojson }}' data-ov-name='{{ o.day_name_color|tojson }}' title="{{ _('Click to edit') }}">
       <td>{{ o.day }}</td>
-      <td>{{ swatch_cell(o.color, "none (paper)") }}</td>
-      <td>{{ swatch_cell(o.day_number_color, "normal") }}</td>
-      <td>{{ swatch_cell(o.day_name_color, "normal") }}</td>
+      <td>{{ swatch_cell(o.color, _("none (paper)")) }}</td>
+      <td>{{ swatch_cell(o.day_number_color, _("normal")) }}</td>
+      <td>{{ swatch_cell(o.day_name_color, _("normal")) }}</td>
       <td>{{ o.note or "" }}</td>
-      <td><form method="post" action="/projects/{{ project.id }}/days/{{ o.day }}/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Remove</button></form></td>
+      <td><form method="post" action="/projects/{{ project.id }}/days/{{ o.day }}/delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">{{ _("Remove") }}</button></form></td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
-{% else %}<p class="hint">No private holidays yet.</p>{% endif %}
+{% else %}<p class="hint">{{ _("No private holidays yet.") }}</p>{% endif %}
 
 <div class="actions bottom">
-  <button class="primary" type="submit" form="settings">Save project</button>
-  <span id="save-status">Changes are saved automatically.</span>
-  <a class="btn" href="/projects/{{ project.id }}/pdf">Download PDF</a>
-  <a class="btn" href="/projects/{{ project.id }}/png">Download PNG</a>
-  <a class="btn" href="/projects/{{ project.id }}/tiff">Download TIFF</a>
-  <form class="inline" method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Delete project “{{ project.name }}”? This cannot be undone.')" style="margin-left:auto">
-    <button class="danger" type="submit">Delete project</button>
+  <button class="primary" type="submit" form="settings">{{ _("Save project") }}</button>
+  <span id="save-status" data-t-autosaved="{{ _('Changes are saved automatically.') }}" data-t-saving="{{ _('Saving…') }}" data-t-saved="{{ _('Saved') }}"
+        data-t-not-saved="{{ _('Not saved:') }}" data-t-network-error="{{ _('network error') }}" data-t-unsaved="{{ _('Unsaved changes…') }}">{{ _("Changes are saved automatically.") }}</span>
+  <a class="btn" href="/projects/{{ project.id }}/pdf">{{ _("Download PDF") }}</a>
+  <a class="btn" href="/projects/{{ project.id }}/png">{{ _("Download PNG") }}</a>
+  <a class="btn" href="/projects/{{ project.id }}/tiff">{{ _("Download TIFF") }}</a>
+  <form class="inline" method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm({{ _('Delete project “{name}”? This cannot be undone.', name=project.name)|tojson }})" style="margin-left:auto">
+    <button class="danger" type="submit">{{ _("Delete project") }}</button>
   </form>
-  <span class="hint" style="flex-basis:100%">{{ project.page_size }} {{ project.orientation }} · {{ project.color_mode }} · fonts and artwork embedded</span>
+  <span class="hint" style="flex-basis:100%">{{ project.page_size }} {{ project.orientation }} · {{ project.color_mode }} · {{ _("fonts and artwork embedded") }}</span>
 </div>
 
 <script>
@@ -349,7 +350,7 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
   pickers.forEach(sel => sel.addEventListener('change', () => paint(sel)));
   base.addEventListener('change', () => pickers.forEach(sel => {
     const def = sel.querySelector('option[value=""]');
-    if (def) { def.textContent = `Default (${base.value})`; def.style.fontFamily = `'mc-${base.value}'`; }
+    if (def) { def.textContent = sel.dataset.defaultLabel.replace(/\([^)]*\)/, `(${base.value})`); def.style.fontFamily = `'mc-${base.value}'`; }
     paint(sel);
   }));
 })();
@@ -406,7 +407,7 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
     widgets.ov_color.set(JSON.parse(row.dataset.ovColor));
     widgets.ov_number_color.set(JSON.parse(row.dataset.ovNumber));
     widgets.ov_name_color.set(JSON.parse(row.dataset.ovName));
-    submit.textContent = 'Update ' + row.dataset.ovDay;
+    submit.textContent = submit.dataset.tUpdate + ' ' + row.dataset.ovDay;
     reset.hidden = false;
     document.querySelectorAll('#ov-list tr.selected').forEach(r => r.classList.remove('selected'));
     row.classList.add('selected');
@@ -419,7 +420,7 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
   reset.addEventListener('click', () => {
     note.value = ''; month.value = 1; limit(); day.value = 1;
     widgets.ov_color.set(defaults.color); widgets.ov_number_color.set(null); widgets.ov_name_color.set(null);
-    submit.textContent = 'Add day'; reset.hidden = true;
+    submit.textContent = submit.dataset.tAdd; reset.hidden = true;
     document.querySelectorAll('#ov-list tr.selected').forEach(r => r.classList.remove('selected'));
   });
 })();
@@ -437,25 +438,25 @@ document.querySelectorAll('.color[data-color]').forEach(box => {
     if (inflight) await inflight;
     const renderedMode = form.querySelector('[name=form_color_mode]').value;
     const chosenMode = form.querySelector('[name=color_mode]').value;
-    show('Saving…');
+    show(status.dataset.tSaving);
     const csrf = document.querySelector('meta[name=csrf-token]').content;
     inflight = fetch(form.action, { method: 'POST', body: new FormData(form), headers: { Accept: 'application/json', 'X-CSRF-Token': csrf } })
       .then(async res => {
         const data = await res.json().catch(() => ({ ok: false, errors: ['unexpected server response'] }));
         if (data.ok) {
           dirty = false;
-          show('Saved ' + new Date().toLocaleTimeString(), 'ok');
+          show(status.dataset.tSaved + ' ' + new Date().toLocaleTimeString(), 'ok');
           if (chosenMode !== renderedMode) location.reload();  // colour widgets differ per model
         } else {
-          show('Not saved: ' + (data.errors || []).join(' · '), 'error');
+          show(status.dataset.tNotSaved + ' ' + (data.errors || []).join(' · '), 'error');
         }
         return data.ok;
       })
-      .catch(() => { show('Not saved: network error', 'error'); return false; })
+      .catch(() => { show(status.dataset.tNotSaved + ' ' + status.dataset.tNetworkError, 'error'); return false; })
       .finally(() => { inflight = null; });
     return inflight;
   }
-  const schedule = delay => { dirty = true; show('Unsaved changes…'); clearTimeout(timer); timer = setTimeout(save, delay); };
+  const schedule = delay => { dirty = true; show(status.dataset.tUnsaved); clearTimeout(timer); timer = setTimeout(save, delay); };
 
   form.addEventListener('input', e => schedule(e.target.type === 'color' ? 400 : 800));
   form.addEventListener('change', e => {

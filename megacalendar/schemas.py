@@ -14,6 +14,7 @@ from phonenumbers import NumberParseException
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from . import config
+from .i18n import t as _
 from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, DAY_ALIGNS, LAYOUTS, RGB, TITLE_ALIGNS, VALIGNS, color_from_dict, to_mode
@@ -29,9 +30,9 @@ def reject_unsafe_text(v: str) -> str:
     templates already auto-escape). Applied in addition to, never instead of, output escaping."""
     for ch in v:
         if unicodedata.category(ch) in ("Cc", "Cf"):
-            raise ValueError("must not contain control characters")
+            raise ValueError(_("must not contain control characters"))
     if "<" in v or ">" in v:
-        raise ValueError("must not contain '<' or '>'")
+        raise ValueError(_("must not contain '<' or '>'"))
     return v
 
 
@@ -40,7 +41,7 @@ def validate_email_address(v: str) -> str:
     try:
         validate_email(v, check_deliverability=False)
     except EmailNotValidError as exc:
-        raise ValueError(f"invalid email address: {exc}") from exc
+        raise ValueError(_("invalid email address: {error}", error=exc)) from exc
     return v
 
 
@@ -49,13 +50,13 @@ def validate_phone_number(v: str) -> str:
     E.164 form, so later exact-match duplicate checks don't need to know about formatting."""
     v = v.strip()
     if not v.startswith("+"):
-        raise ValueError("phone number must be in international format, starting with + and a country code")
+        raise ValueError(_("phone number must be in international format, starting with + and a country code"))
     try:
         parsed = phonenumbers.parse(v, None)
     except NumberParseException as exc:
-        raise ValueError(f"invalid phone number: {exc}") from exc
+        raise ValueError(_("invalid phone number: {error}", error=exc)) from exc
     if not phonenumbers.is_possible_number(parsed):
-        raise ValueError("invalid phone number")
+        raise ValueError(_("invalid phone number"))
     return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
 
@@ -65,15 +66,15 @@ _PASSWORD_SPECIAL_CHARS = set("!@#$%^&*()-_=+[]{}|;:,.<>/?~`'\"\\ ")
 
 def validate_password_strength(v: str) -> str:
     if len(v) < MIN_PASSWORD:
-        raise ValueError(f"password must be at least {MIN_PASSWORD} characters")
+        raise ValueError(_("password must be at least {n} characters", n=MIN_PASSWORD))
     if not any(c.islower() for c in v):
-        raise ValueError("password must contain a lowercase letter")
+        raise ValueError(_("password must contain a lowercase letter"))
     if not any(c.isupper() for c in v):
-        raise ValueError("password must contain an uppercase letter")
+        raise ValueError(_("password must contain an uppercase letter"))
     if not any(c.isdigit() for c in v):
-        raise ValueError("password must contain a digit")
+        raise ValueError(_("password must contain a digit"))
     if not any(c in _PASSWORD_SPECIAL_CHARS for c in v):
-        raise ValueError("password must contain a special character")
+        raise ValueError(_("password must contain a special character"))
     return v
 
 
@@ -351,7 +352,8 @@ class ProjectBase(BaseModel):
             taken = {self.title_align} | ({self.year_align} if self.title and self.show_year else set())
             if self.logo_align in taken:
                 free = [a for a in TITLE_ALIGNS if a not in taken]
-                raise ValueError(f"logo_align {self.logo_align!r} is taken by the title/year; choose one of {free}")
+                raise ValueError(_("logo position {align!r} is taken by the title/year; choose one of {free}",
+                                  align=self.logo_align, free=free))
         return self
 
     @model_validator(mode="after")
@@ -363,7 +365,8 @@ class ProjectBase(BaseModel):
             limit = max_month_gap_mm(CalendarSpec(year=self.year, page_size=self.page_size, orientation=self.orientation,
                                                   margin_mm=self.margin_mm, layout=self.layout))
             if self.month_gap_mm > limit:
-                raise ValueError(f"month_gap_mm must not exceed {limit} mm for {self.page_size} {self.orientation} {self.layout}")
+                raise ValueError(_("month gap must not exceed {limit} mm for {page_size} {orientation} {layout}",
+                                  limit=limit, page_size=self.page_size, orientation=self.orientation, layout=self.layout))
         return self
 
     @field_validator("background_mode")
@@ -379,7 +382,7 @@ class ProjectBase(BaseModel):
     def _font(cls, v, info):
         if v is None or (isinstance(v, str) and not v.strip()):
             if info.field_name == "font_family":
-                raise ValueError("font_family is required")
+                raise ValueError(_("font_family is required"))
             return None
         if v not in available_families():
             raise ValueError(f"unknown font family {v!r}; available: {available_families()}")
@@ -401,7 +404,7 @@ class ProjectBase(BaseModel):
     def _holidays(self):
         if self.holidays_enabled:
             if not self.holiday_country:
-                raise ValueError("holiday_country is required when holidays are enabled")
+                raise ValueError(_("holiday_country is required when holidays are enabled"))
             supported = holidays.list_supported_countries()
             if self.holiday_country not in supported:
                 raise ValueError(f"unsupported holiday country {self.holiday_country!r}")
@@ -601,9 +604,24 @@ class ThemeUpdate(BaseModel):
         return v
 
 
+class LanguageUpdate(BaseModel):
+    """The website UI language (distinct from ProfileUpdate.locale, which is the default
+    language for new *calendars*); used by the header picker, works for anonymous visitors too."""
+    language: str
+
+    @field_validator("language")
+    @classmethod
+    def _language(cls, v: str) -> str:
+        from .i18n import LANGUAGE_CODES
+
+        if v not in LANGUAGE_CODES:
+            raise ValueError(f"language must be one of {sorted(LANGUAGE_CODES)}")
+        return v
+
+
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+    new_password: str = Field(max_length=200)  # length+strength enforced by _strength below, translatably
 
     @field_validator("new_password")
     @classmethod
@@ -613,7 +631,7 @@ class PasswordChange(BaseModel):
 
 class UserCreate(ProfileUpdate):
     username: str = Field(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_.@-]+$")
-    password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+    password: str = Field(max_length=200)  # length+strength enforced by _strength below, translatably
     project_limit: int | None = Field(default=1, ge=0)  # year calendars; None = unlimited
     small_project_limit: int | None = Field(default=2, ge=0)  # one-month calendars; None = unlimited
     # contact details are mandatory when an account is created
@@ -638,7 +656,7 @@ class UserUpdate(ProfileUpdate):
     project_limit: int | None = Field(default=1, ge=0)
     small_project_limit: int | None = Field(default=2, ge=0)
     is_active: bool = True
-    password: str | None = Field(default=None, min_length=MIN_PASSWORD, max_length=200)  # set to reset
+    password: str | None = Field(default=None, max_length=200)  # set to reset; length+strength enforced by _strength below
 
     @field_validator("password")
     @classmethod
@@ -653,6 +671,7 @@ class UserRead(ProfileUpdate):
     is_master: bool
     is_active: bool
     mfa_enabled: bool
+    ui_language: str | None = None
     project_limit: int | None
     small_project_limit: int | None
     created_at: datetime
@@ -677,12 +696,12 @@ CODE_ALPHABET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 def _validate_code(v: str) -> str:
     v = v.strip().upper()
     if len(v) != CODE_LENGTH or not CODE_ALPHABET.issuperset(v):
-        raise ValueError(f"code must be {CODE_LENGTH} letters/digits")
+        raise ValueError(_("code must be {n} letters/digits", n=CODE_LENGTH))
     return v
 
 
 class ConfirmEmailIn(BaseModel):
-    code: str = Field(min_length=CODE_LENGTH, max_length=CODE_LENGTH)
+    code: str = Field(max_length=200)  # length enforced by _validate_code, translatably
 
     @field_validator("code")
     @classmethod
@@ -701,14 +720,14 @@ class MfaSetupRead(BaseModel):
 
 class MfaCodeIn(BaseModel):
     """A 6-digit TOTP code: MFA setup confirmation and login verification both take just this."""
-    code: str = Field(min_length=TOTP_CODE_LENGTH, max_length=TOTP_CODE_LENGTH)
+    code: str = Field(max_length=200)  # length enforced by _code below, translatably
 
     @field_validator("code")
     @classmethod
     def _code(cls, v: str) -> str:
         v = v.strip()
         if len(v) != TOTP_CODE_LENGTH or not v.isdigit():
-            raise ValueError(f"code must be {TOTP_CODE_LENGTH} digits")
+            raise ValueError(_("code must be {n} digits", n=TOTP_CODE_LENGTH))
         return v
 
 
@@ -727,8 +746,8 @@ class ForgotPasswordIn(BaseModel):
 
 class ResetPasswordIn(BaseModel):
     identifier: str = Field(min_length=1, max_length=200)
-    code: str = Field(min_length=CODE_LENGTH, max_length=CODE_LENGTH)
-    new_password: str = Field(min_length=MIN_PASSWORD, max_length=200)
+    code: str = Field(max_length=200)  # length enforced by _code below, translatably
+    new_password: str = Field(max_length=200)  # length+strength enforced by _strength below, translatably
 
     @field_validator("identifier")
     @classmethod
