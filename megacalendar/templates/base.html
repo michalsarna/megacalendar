@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-user="{{ 'in' if user else 'out' }}"{% if user and user.theme != 'system' %} data-theme="{{ user.theme }}"{% endif %}>
+<html lang="{{ current_ui_language }}" data-user="{{ 'in' if user else 'out' }}"{% if user and user.theme != 'system' %} data-theme="{{ user.theme }}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,41 +12,53 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-{% macro theme_toggle() %}<button type="button" id="theme-toggle" title="Switch colour theme" aria-label="Switch colour theme"></button>{% endmacro %}
+{% macro theme_toggle() %}<button type="button" id="theme-toggle" title="{{ _('Switch colour theme') }}" aria-label="{{ _('Switch colour theme') }}"
+  data-t-system="{{ _('Theme: System (click to change)') }}" data-t-light="{{ _('Theme: Light (click to change)') }}"
+  data-t-dark="{{ _('Theme: Dark (click to change)') }}"></button>{% endmacro %}
+{% macro language_picker() %}
+<form method="post" action="/language" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="next" value="{{ request.url.path }}">
+  <select name="language" onchange="this.form.submit()" aria-label="{{ _('Language') }}">
+    {% for code, name in ui_languages %}<option value="{{ code }}" {% if code == current_ui_language %}selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+</form>
+{% endmacro %}
 <header>
   <h1><a href="/">megacalendar</a></h1>
-  <span class="hint">print-ready A0/A1 wall calendars</span>
+  <span class="hint">{{ _("print-ready A0/A1 wall calendars") }}</span>
   <nav class="nav">
     {% if user %}
-      <a href="/projects">Projects</a>
-      <a href="/profile">Profile</a>
-      {% if user.is_master %}<a href="/users">Users</a> <a href="/settings/mail">Mail</a>{% endif %}
-      <a href="/docs">API</a>
-      <span class="who">{{ user.display_name }}{% if user.is_master %} · master{% endif %}</span>
+      <a href="/projects">{{ _("Projects") }}</a>
+      <a href="/profile">{{ _("Profile") }}</a>
+      {% if user.is_master %}<a href="/users">{{ _("Users") }}</a> <a href="/settings/mail">{{ _("Mail") }}</a>{% endif %}
+      <a href="/docs">{{ _("API") }}</a>
+      <span class="who">{{ user.display_name }}{% if user.is_master %} · {{ _("master") }}{% endif %}</span>
+      {{ language_picker() }}
       {{ theme_toggle() }}
-      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">Log out</button></form>
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="logout">{{ _("Log out") }}</button></form>
     {% elif not on_login_page %}
+      {{ language_picker() }}
       {{ theme_toggle() }}
-      <a class="btn primary" href="/login">Log in</a>
+      <a class="btn primary" href="/login">{{ _("Log in") }}</a>
     {% else %}
+      {{ language_picker() }}
       {{ theme_toggle() }}
     {% endif %}
   </nav>
 </header>
 <main>
-  {% if user and default_password %}<div class="errors">The master account still uses the default password. <a href="/profile#password">Change it now</a>.</div>{% endif %}
+  {% if user and default_password %}<div class="errors">{{ _("The master account still uses the default password.") }} <a href="/profile#password">{{ _("Change it now") }}</a>.</div>{% endif %}
   {% if errors %}<div class="errors"><ul style="margin:0;padding-left:1.1rem">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
   {% block content %}{% endblock %}
 </main>
-<footer class="site-footer">megacalendar by DeerTeam · Claude made it in 2026 · <a href="/cookies">Cookies</a></footer>
+<footer class="site-footer">{{ _("megacalendar by DeerTeam · Claude made it in 2026") }} · <a href="/cookies">{{ _("Cookies") }}</a></footer>
 <div id="cookie-notice" class="cookie-notice" hidden>
-  <p>This site uses one essential cookie to keep you logged in and protect your forms from cross-site
-    request forgery. No tracking or advertising cookies are used. <a href="/cookies">Learn more</a>.</p>
-  <button type="button" id="cookie-notice-ok" class="primary">Got it</button>
+  <p>{{ _("This site uses one essential cookie to keep you logged in and protect your forms from cross-site request forgery. No tracking or advertising cookies are used.") }}
+    <a href="/cookies">{{ _("Learn more") }}</a>.</p>
+  <button type="button" id="cookie-notice-ok" class="primary">{{ _("Got it") }}</button>
 </div>
-<noscript><div class="cookie-notice">This site uses one essential cookie to keep you logged in and protect
-  your forms from cross-site request forgery. No tracking or advertising cookies are used.
-  <a href="/cookies">Learn more</a>.</div></noscript>
+<noscript><div class="cookie-notice">{{ _("This site uses one essential cookie to keep you logged in and protect your forms from cross-site request forgery. No tracking or advertising cookies are used.") }}
+  <a href="/cookies">{{ _("Learn more") }}</a>.</div></noscript>
 <script>
 // ---- Theme toggle: cycles System -> Light -> Dark -> System. "System" (no stored preference)
 // follows prefers-color-scheme live, including while this tab stays open across an OS theme switch.
@@ -54,8 +66,8 @@
 // visitors keep it in localStorage only, since there is no account to attach it to.
 (() => {
   const NEXT = { system: "light", light: "dark", dark: "system" };
-  const TITLE = { system: "Theme: System (click to change)", light: "Theme: Light (click to change)", dark: "Theme: Dark (click to change)" };
   const btn = document.getElementById("theme-toggle");
+  const TITLE = { system: btn.dataset.tSystem, light: btn.dataset.tLight, dark: btn.dataset.tDark };
   const loggedIn = document.documentElement.dataset.user === "in";
   const current = () => document.documentElement.getAttribute("data-theme") || "system";
   const setVisual = mode => {

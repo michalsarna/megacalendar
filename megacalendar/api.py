@@ -16,8 +16,8 @@ from .pdf.fonts import available_families
 from .pdf.pagesizes import ORIENTATIONS, PAGE_SIZES
 from .pdf.spec import COLOR_MODES, LAYOUTS, TITLE_ALIGNS
 from .schemas import (BACKGROUND_MODES, AddressIn, AddressRead, BackgroundAssetRead, ConfirmEmailIn, DayOverrideIn,
-                      DayOverrideRead, ForgotPasswordIn, LoginIn, MailSettingsRead, MailSettingsUpdate, MeRead,
-                      MfaCodeIn, MfaDisableIn, MfaSetupRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate,
+                      DayOverrideRead, ForgotPasswordIn, LanguageUpdate, LoginIn, MailSettingsRead, MailSettingsUpdate,
+                      MeRead, MfaCodeIn, MfaDisableIn, MfaSetupRead, Meta, PasswordChange, ProfileUpdate, ProjectCreate,
                       ProjectRead, ProjectUpdate, RegisterIn, ResetPasswordIn, ThemeUpdate, UserCreate, UserRead,
                       UserUpdate)
 
@@ -166,6 +166,14 @@ def update_me(data: ProfileUpdate, user: User = CurrentUser, db: Session = Depen
 def update_theme(data: ThemeUpdate, user: User = CurrentUser, db: Session = Depends(get_db)):
     """Separate from PUT /me so the header toggle never has to resend the rest of the profile."""
     service.update_theme(db, user, data.theme)
+    return Response(status_code=204)
+
+
+@router.post("/me/language", status_code=204)
+def update_language(data: LanguageUpdate, request: Request, user: User = CurrentUser, db: Session = Depends(get_db)):
+    service.update_ui_language(db, user, data.language)
+    if "session" in request.scope:
+        request.session["lang"] = data.language
     return Response(status_code=204)
 
 

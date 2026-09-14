@@ -27,6 +27,19 @@ CMYK project downloads as a true CMYK TIFF, pixel-for-pixel the same ink values 
   self-registration is refused until it's set up. Users who forget their password use `/forgot-password`
   → emailed code → `/reset-password`, the same 7-character code mechanism, without revealing whether an
   account exists. Accounts created by the master are trusted and skip confirmation.
+- The website itself is translatable (separately from a project's own `locale`, which only affects
+  the *calendar's* month/day names — see below): a language picker in the header works signed out or
+  in, storing the choice in the session so it takes effect immediately, and — once logged in — on the
+  profile too, so it follows the account to another browser. Signed-out visitors otherwise get
+  whichever supported language their browser's `Accept-Language` header asks for, falling back to
+  English. Currently English and Polish (`megacalendar/locale/pl.json`). Every page, and the more
+  common validation/error messages, go through `megacalendar/i18n.py`'s `t()` (Jinja global `_`);
+  it's a flat `{"English source string": "translated string"}` catalog per language, matched exactly
+  against the source text with a plain English fallback for anything missing — so a translation can
+  be filled in gradually and a typo'd key just quietly shows English rather than crashing. **To add a
+  language:** add `(code, "native name")` to `i18n.LANGUAGES`, then create
+  `megacalendar/locale/<code>.json` — `tests/test_i18n.py::test_polish_catalog_matches_source_exactly`
+  shows the exact extraction method to generate/verify a complete key list for any language.
 
 - Sheet sizes A0 to A5, portrait or landscape (new sizes: one line in `megacalendar/pdf/pagesizes.py`).
 - Adjustable space between months (validated against the sheet so blocks never overlap; table-style
@@ -228,6 +241,7 @@ POST   /api/auth/confirm-email {"code"}              POST /api/auth/resend-confi
 POST   /api/auth/forgot-password {"identifier"}       POST /api/auth/reset-password {"identifier","code","new_password"}
 GET    /api/me    PUT /api/me    POST /api/me/password    GET|POST /api/me/addresses  PUT|DELETE /api/me/addresses/{id}
 POST   /api/me/mfa/setup   POST /api/me/mfa/confirm {"code"}   POST /api/me/mfa/disable {"current_password"}
+POST   /api/me/language {"language"}                     (web-only equivalent: POST /language, works signed out too)
 GET    /api/users  POST /api/users  GET|PUT|DELETE /api/users/{id}                      (master only)
 GET|PUT /api/settings/mail   POST /api/settings/mail/test?to_email=…                    (master only)
 GET    /api/meta
@@ -262,6 +276,8 @@ megacalendar/
   auth.py     passwords (PBKDF2), session/Basic authentication, master helpers
   mail.py     SMTP sending for confirmation/reset/test emails (no DB knowledge)
   mfa.py      TOTP secret/QR/verification for two-factor authentication (no DB knowledge)
+  i18n.py     UI text translation: per-request language in a contextvar, JSON catalogs
+  locale/     one <code>.json translation catalog per website UI language (see Features above)
   models.py   SQLAlchemy tables (User, DeliveryAddress, Project, DayOverride, BackgroundAsset, MailSettings)
   schemas.py  Pydantic validation shared by API and forms
   service.py  application logic (CRUD, uploads, spec building, PDF generation)

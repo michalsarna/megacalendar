@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Log in · megacalendar{% endblock %}
+{% block title %}{{ _("Log in") }} · megacalendar{% endblock %}
 {% block content %}
 <div class="login-box">
-  <h2>Log in</h2>
-  {% if request.query_params.get("reset") %}<div class="ok">Password updated — log in with your new password.</div>{% endif %}
+  <h2>{{ _("Log in") }}</h2>
+  {% if request.query_params.get("reset") %}<div class="ok">{{ _("Password updated — log in with your new password.") }}</div>{% endif %}
   <form method="post" action="/login"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="next" value="{{ next or '' }}">
     <fieldset>
-      <label>Username <input name="username" value="{{ username or '' }}" required autofocus autocomplete="username"></label>
-      <label style="margin-top:.8rem">Password <input name="password" type="password" required autocomplete="current-password"></label>
+      <label>{{ _("Username") }} <input name="username" value="{{ username or '' }}" required autofocus autocomplete="username"></label>
+      <label style="margin-top:.8rem">{{ _("Password") }} <input name="password" type="password" required autocomplete="current-password"></label>
     </fieldset>
-    <div class="actions"><button class="primary" type="submit" style="width:100%">Log in</button></div>
+    <div class="actions"><button class="primary" type="submit" style="width:100%">{{ _("Log in") }}</button></div>
   </form>
-  <p class="hint" style="text-align:center">No account yet? <a href="/register">Create one</a>. Forgot your password? <a href="/forgot-password">Reset it</a>.</p>
+  <p class="hint" style="text-align:center">{{ _("No account yet?") }} <a href="/register">{{ _("Create one") }}</a>. {{ _("Forgot your password?") }} <a href="/forgot-password">{{ _("Reset it") }}</a>.</p>
 </div>
 {% endblock %}

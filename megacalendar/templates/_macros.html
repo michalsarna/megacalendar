@@ -1,14 +1,14 @@
 {#- Shared macros, imported by templates that need them (e.g. {% from "_macros.html" import phone_field with context %}). -#}
-{% macro phone_field(name, value, required=False, label="Phone") %}
+{% macro phone_field(name, value, required=False, label=_("Phone")) %}
 {% set code, rest = split_phone_number(value) %}
 <label class="phone-field">{{ label }}
   <span class="phone-field-row">
-    <select class="phone-cc" aria-label="Country" {% if required %}required{% endif %}>
+    <select class="phone-cc" aria-label="{{ _("Country") }}" {% if required %}required{% endif %}>
       <option value="">🌐</option>
       {% for c, flag, country_label in phone_country_codes %}<option value="{{ c }}" {% if c == code %}selected{% endif %}>{{ flag }} {{ country_label }}</option>{% endfor %}
     </select>
     <input type="text" class="phone-number" inputmode="tel" {% if required %}required{% endif %} maxlength="30"
-          value="{{ rest }}" placeholder="500 100 200" aria-label="{{ label }} number">
+          value="{{ rest }}" placeholder="500 100 200" aria-label="{{ _("{label} number", label=label) }}">
     <input type="hidden" name="{{ name }}" class="phone-hidden" value="{{ value or '' }}">
   </span>
 </label>

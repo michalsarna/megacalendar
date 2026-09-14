@@ -1,33 +1,33 @@
 {% extends "base.html" %}
 {% from "_macros.html" import phone_field with context %}
-{% block title %}Create an account · megacalendar{% endblock %}
+{% block title %}{{ _("Create an account") }} · megacalendar{% endblock %}
 {% block content %}
 {% set v = values or {} %}
 <div class="login-box" style="max-width:560px">
-  <h2>Create an account</h2>
-  <p class="hint" style="text-align:center">You get one year calendar and two one-month calendars. Each email address and phone number can be used for one account only.</p>
+  <h2>{{ _("Create an account") }}</h2>
+  <p class="hint" style="text-align:center">{{ _("You get one year calendar and two one-month calendars. Each email address and phone number can be used for one account only.") }}</p>
   <form method="post" action="/register"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <fieldset>
-      <legend>Account</legend>
+      <legend>{{ _("Account") }}</legend>
       <div class="row">
-        <label>Username <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus autocomplete="username"></label>
-        <label>Password (min. 12, upper+lower+digit+special) <input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
-        <label>Repeat password <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
+        <label>{{ _("Username") }} <input name="username" required minlength="2" maxlength="80" pattern="[A-Za-z0-9_.@-]+" value="{{ v.get('username', '') }}" autofocus autocomplete="username"></label>
+        <label>{{ _("Password (min. 12, upper+lower+digit+special)") }} <input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
+        <label>{{ _("Repeat password") }} <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
       </div>
     </fieldset>
     <fieldset>
-      <legend>Contact</legend>
+      <legend>{{ _("Contact") }}</legend>
       <div class="row">
-        <label>Name <input name="first_name" required maxlength="100" value="{{ v.get('first_name', '') }}"></label>
-        <label>Surname <input name="last_name" required maxlength="100" value="{{ v.get('last_name', '') }}"></label>
+        <label>{{ _("Name") }} <input name="first_name" required maxlength="100" value="{{ v.get('first_name', '') }}"></label>
+        <label>{{ _("Surname") }} <input name="last_name" required maxlength="100" value="{{ v.get('last_name', '') }}"></label>
         {{ phone_field("phone", v.get('phone', ''), required=True) }}
-        <label>Email <input name="email" type="email" required maxlength="200" value="{{ v.get('email', '') }}"></label>
-        <label>Calendar language
+        <label>{{ _("Email") }} <input name="email" type="email" required maxlength="200" value="{{ v.get('email', '') }}"></label>
+        <label>{{ _("Calendar language") }}
           <select name="locale">{% for code, name in languages %}<option value="{{ code }}" {% if code == v.get('locale', 'en') %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
       </div>
     </fieldset>
-    <div class="actions"><button class="primary" type="submit" style="width:100%">Create account</button></div>
+    <div class="actions"><button class="primary" type="submit" style="width:100%">{{ _("Create account") }}</button></div>
   </form>
-  <p class="hint" style="text-align:center">Already registered? <a href="/login">Log in</a>.</p>
+  <p class="hint" style="text-align:center">{{ _("Already registered?") }} <a href="/login">{{ _("Log in") }}</a>.</p>
 </div>
 {% endblock %}

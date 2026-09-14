@@ -1,96 +1,96 @@
 {% extends "base.html" %}
 {% from "_macros.html" import phone_field with context %}
-{% block title %}Profile · megacalendar{% endblock %}
+{% block title %}{{ _("Profile") }} · megacalendar{% endblock %}
 {% block content %}
-{% if saved %}<div class="ok">Saved ({{ saved }}).</div>{% endif %}
-<h2>Profile of {{ user.username }}</h2>
+{% if saved %}<div class="ok">{{ _("Saved ({name}).", name=saved) }}</div>{% endif %}
+<h2>{{ _("Profile of") }} {{ user.username }}</h2>
 <form method="post" action="/profile"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
-      <label>Name <input name="first_name" maxlength="100" value="{{ user.first_name or '' }}"></label>
-      <label>Surname <input name="last_name" maxlength="100" value="{{ user.last_name or '' }}"></label>
+      <label>{{ _("Name") }} <input name="first_name" maxlength="100" value="{{ user.first_name or '' }}"></label>
+      <label>{{ _("Surname") }} <input name="last_name" maxlength="100" value="{{ user.last_name or '' }}"></label>
       {{ phone_field("phone", user.phone) }}
-      <label>Email <input name="email" type="email" maxlength="200" value="{{ user.email or '' }}"></label>
-      <label>Default calendar language
+      <label>{{ _("Email") }} <input name="email" type="email" maxlength="200" value="{{ user.email or '' }}"></label>
+      <label>{{ _("Default calendar language") }}
         <select name="locale">{% for code, name in languages %}<option value="{{ code }}" {% if code == user.locale %}selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
-      <label>Colour theme
+      <label>{{ _("Colour theme") }}
         <select name="theme">
-          <option value="system" {% if user.theme == "system" %}selected{% endif %}>Follow system</option>
-          <option value="light" {% if user.theme == "light" %}selected{% endif %}>Light</option>
-          <option value="dark" {% if user.theme == "dark" %}selected{% endif %}>Dark</option>
+          <option value="system" {% if user.theme == "system" %}selected{% endif %}>{{ _("Follow system") }}</option>
+          <option value="light" {% if user.theme == "light" %}selected{% endif %}>{{ _("Light") }}</option>
+          <option value="dark" {% if user.theme == "dark" %}selected{% endif %}>{{ _("Dark") }}</option>
         </select></label>
-      <button class="primary" type="submit">Save profile</button>
+      <button class="primary" type="submit">{{ _("Save profile") }}</button>
     </div>
-    <p class="hint">Year calendars: {{ project_count }}{% if user.project_limit is not none %} of {{ user.project_limit }} allowed{% else %} (no limit){% endif %}.
-       One-month calendars: {{ small_count }}{% if user.small_project_limit is not none %} of {{ user.small_project_limit }} allowed{% else %} (no limit){% endif %}.</p>
+    <p class="hint">{% if user.project_limit is not none %}{{ _("Year calendars: {count} of {limit} allowed.", count=project_count, limit=user.project_limit) }}{% else %}{{ _("Year calendars: {count} (no limit).", count=project_count) }}{% endif %}
+       {% if user.small_project_limit is not none %}{{ _("One-month calendars: {count} of {limit} allowed.", count=small_count, limit=user.small_project_limit) }}{% else %}{{ _("One-month calendars: {count} (no limit).", count=small_count) }}{% endif %}</p>
   </fieldset>
 </form>
 
-<h2 id="password">Password</h2>
+<h2 id="password">{{ _("Password") }}</h2>
 <form method="post" action="/profile/password"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
-      <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
-      <label>New password <input name="new_password" type="password" required minlength="12" autocomplete="new-password"></label>
-      <label>Repeat new password <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
-      <button type="submit">Change password</button>
+      <label>{{ _("Current password") }} <input name="current_password" type="password" required autocomplete="current-password"></label>
+      <label>{{ _("New password") }} <input name="new_password" type="password" required minlength="12" autocomplete="new-password"></label>
+      <label>{{ _("Repeat new password") }} <input name="confirm_password" type="password" required minlength="12" autocomplete="new-password"></label>
+      <button type="submit">{{ _("Change password") }}</button>
     </div>
   </fieldset>
 </form>
 
-<h2 id="mfa">Two-factor authentication</h2>
+<h2 id="mfa">{{ _("Two-factor authentication") }}</h2>
 {% if user.mfa_enabled %}
-<p class="hint">Enabled: your account requires a 6-digit code from your authenticator app at login.</p>
+<p class="hint">{{ _("Enabled: your account requires a 6-digit code from your authenticator app at login.") }}</p>
 <form method="post" action="/profile/mfa/disable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
     <div class="row">
-      <label>Current password <input name="current_password" type="password" required autocomplete="current-password"></label>
-      <button class="danger" type="submit">Disable two-factor authentication</button>
+      <label>{{ _("Current password") }} <input name="current_password" type="password" required autocomplete="current-password"></label>
+      <button class="danger" type="submit">{{ _("Disable two-factor authentication") }}</button>
     </div>
   </fieldset>
 </form>
 {% else %}
-<p class="hint">Not enabled. Add a second factor (Google Authenticator or similar) to protect this account.</p>
-<a class="btn" href="/profile/mfa/setup">Set up two-factor authentication</a>
+<p class="hint">{{ _("Not enabled. Add a second factor (Google Authenticator or similar) to protect this account.") }}</p>
+<a class="btn" href="/profile/mfa/setup">{{ _("Set up two-factor authentication") }}</a>
 {% endif %}
 
-<h2 id="addresses">Delivery addresses</h2>
+<h2 id="addresses">{{ _("Delivery addresses") }}</h2>
 {% macro address_fields(a) %}
-  <label>Label <input name="label" maxlength="100" value="{{ a.label or '' if a else '' }}" placeholder="Office"></label>
-  <label>Recipient <input name="recipient" maxlength="200" required value="{{ a.recipient if a else '' }}"></label>
-  <label>Street and number <input name="street" maxlength="200" required value="{{ a.street if a else '' }}"></label>
-  <label>Postal code <input name="postal_code" maxlength="20" required value="{{ a.postal_code if a else '' }}" style="width:6rem"></label>
-  <label>City <input name="city" maxlength="100" required value="{{ a.city if a else '' }}"></label>
-  <label>Country
+  <label>{{ _("Label") }} <input name="label" maxlength="100" value="{{ a.label or '' if a else '' }}" placeholder="{{ _('Office') }}"></label>
+  <label>{{ _("Recipient") }} <input name="recipient" maxlength="200" required value="{{ a.recipient if a else '' }}"></label>
+  <label>{{ _("Street and number") }} <input name="street" maxlength="200" required value="{{ a.street if a else '' }}"></label>
+  <label>{{ _("Postal code") }} <input name="postal_code" maxlength="20" required value="{{ a.postal_code if a else '' }}" style="width:6rem"></label>
+  <label>{{ _("City") }} <input name="city" maxlength="100" required value="{{ a.city if a else '' }}"></label>
+  <label>{{ _("Country") }}
     <select name="country" required>
-      <option value="" {% if not a %}selected{% endif %}>— choose —</option>
+      <option value="" {% if not a %}selected{% endif %}>{{ _("— choose —") }}</option>
       {% if a and a.country not in country_names %}<option value="{{ a.country }}" selected>{{ a.country }}</option>{% endif %}
       {% for c in country_names %}<option value="{{ c }}" {% if a and a.country == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
     </select></label>
   {{ phone_field("phone", a.phone if a else none) }}
-  <label class="inline"><input type="checkbox" name="is_default" {% if a and a.is_default %}checked{% endif %}> Default</label>
+  <label class="inline"><input type="checkbox" name="is_default" {% if a and a.is_default %}checked{% endif %}> {{ _("Default") }}</label>
 {% endmacro %}
 {% for a in user.addresses %}
 <form method="post" action="/profile/addresses/{{ a.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
-    <legend>{{ a.label or ("Address " ~ loop.index) }}{% if a.is_default %} · default{% endif %}</legend>
+    <legend>{{ a.label or _("Address {n}", n=loop.index) }}{% if a.is_default %} · {{ _("default") }}{% endif %}</legend>
     <div class="row">
       {{ address_fields(a) }}
-      <button type="submit">Save</button>
-      <button type="submit" class="danger" form="del-addr-{{ a.id }}">Remove</button>
+      <button type="submit">{{ _("Save") }}</button>
+      <button type="submit" class="danger" form="del-addr-{{ a.id }}">{{ _("Remove") }}</button>
     </div>
   </fieldset>
 </form>
-<form method="post" action="/profile/addresses/{{ a.id }}/delete" id="del-addr-{{ a.id }}" onsubmit="return confirm('Remove this address?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+<form method="post" action="/profile/addresses/{{ a.id }}/delete" id="del-addr-{{ a.id }}" onsubmit="return confirm('{{ _('Remove this address?') }}')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
 {% else %}
-<p class="hint">No delivery addresses yet.</p>
+<p class="hint">{{ _("No delivery addresses yet.") }}</p>
 {% endfor %}
 <form method="post" action="/profile/addresses"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <fieldset>
-    <legend>Add an address</legend>
+    <legend>{{ _("Add an address") }}</legend>
     <div class="row">
       {{ address_fields(none) }}
-      <button class="primary" type="submit">Add address</button>
+      <button class="primary" type="submit">{{ _("Add address") }}</button>
     </div>
   </fieldset>
 </form>
