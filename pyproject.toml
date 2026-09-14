@@ -1,6 +1,6 @@
 [project]
 name = "megacalendar"
-version = "0.1.0"
+version = "0.6.0"
 description = "Web app that generates print-ready, large-format (A0/A1) CMYK PDF wall calendars"
 readme = "README.md"
 requires-python = ">=3.12"

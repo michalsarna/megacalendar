@@ -46,6 +46,11 @@ form.narrow { max-width: 520px; }
 button.logout { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-ink); }
 button.logout:hover { background: var(--danger-bg-hover); }
 .site-footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem 1rem 1.5rem; border-top: 1px solid var(--line); margin-top: 2rem; background: var(--surface); }
+.site-footer a { color: var(--muted); }
+.cookie-notice { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--surface); border-top: 1px solid var(--line); padding: .8rem 1.2rem; display: flex; gap: 1rem; align-items: center; justify-content: center; flex-wrap: wrap; box-shadow: 0 -2px 10px rgba(0, 0, 0, .12); }
+.cookie-notice[hidden] { display: none; }
+.cookie-notice p { margin: 0; font-size: .85rem; color: var(--muted); max-width: 46rem; }
+.cookie-notice a { color: var(--ink); }
 main { min-height: calc(100vh - 12rem); }
 table.users td input { min-width: 0; }
 main { max-width: 1100px; margin: 1.5rem auto; padding: 0 1.5rem; }

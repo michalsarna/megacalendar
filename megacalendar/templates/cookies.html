@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Cookies · megacalendar{% endblock %}
+{% block content %}
+<h2>Cookies</h2>
+<p>megacalendar uses exactly one cookie. No third party, advertising, analytics or tracking cookies
+  are set by this site, and none of your data is shared with anyone else.</p>
+<table style="max-width:640px">
+  <thead><tr><th>Cookie</th><th>Purpose</th><th>Duration</th><th>Type</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>megacalendar_session</code></td>
+      <td>Keeps you logged in between requests, and carries the token that protects your account's
+        forms against cross-site request forgery (CSRF). While signing in or registering, it also
+        briefly holds which account is mid-way through email confirmation or two-factor verification.</td>
+      <td>14 days, or until you log out</td>
+      <td>Strictly necessary</td>
+    </tr>
+  </tbody>
+</table>
+<p class="hint" style="max-width:640px">This cookie is <strong>strictly necessary</strong>: the site cannot
+  function without it (there is no way to stay logged in, submit a form, or complete registration
+  otherwise). Under GDPR and the ePrivacy Directive, strictly necessary cookies don't require your
+  consent to be set, but we still want you to know exactly what it is and why it's there. The cookie's
+  content is cryptographically signed by the server and only readable by megacalendar; if you're not
+  logged in, it holds nothing more than a short random CSRF token.</p>
+<p class="hint" style="max-width:640px">It's set on your very first visit to any page, even before you log
+  in or fill in any form, because the CSRF token it carries has to already exist by the time you submit
+  one. There is currently no way to browse the site with this cookie switched off.</p>
+{% endblock %}
